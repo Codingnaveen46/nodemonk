@@ -26,36 +26,70 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const simulationRef = useRef<d3.Simulation<GraphNode, d3.SimulationLinkDatum<GraphNode>> | null>(null);
 
   // Transform state for pan and zoom
-  const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
-  const [isDragging, setIsDragging] = useState(false);
+  const [transform, setTransform] = useState({ x: 0, y: 0, k: 0.85 });
+  const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
+  const [draggedNode, setDraggedNode] = useState<GraphNode | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [simRunning, setSimRunning] = useState(true);
   const [showArrows, setShowArrows] = useState(true);
-  const [showEdgeLabels, setShowEdgeLabels] = useState(true);
+  const [showEdgeLabels, setShowEdgeLabels] = useState(false);
 
   // Node ID to Node map for fast lookups
   const nodeMapRef = useRef<Map<string, GraphNode>>(new Map());
   // Adjacency map: nodeId -> Map<neighborId, { relation: string, confidence: string, isOutgoing: boolean }>
   const adjMapRef = useRef<Map<string, Map<string, { relation: string; confidence: string; isOutgoing: boolean }>>>(new Map());
-
   // Store active simulation links
   const simLinksRef = useRef<Array<{ source: GraphNode; target: GraphNode; relation: string; confidence: string }>>([]);
+  // Community Centers
+  const commCentersRef = useRef<Record<number, { x: number; y: number }>>({});
 
-  // Initialize simulation
+  // Initialize simulation with Clustered Layout
   useEffect(() => {
     if (!nodes.length) return;
 
-    const nMap = new Map<string, GraphNode>();
+    // 1. Group by community & compute centers
+    const comms: Record<number, GraphNode[]> = {};
     nodes.forEach(n => {
-      nMap.set(n.id, n);
-      if (n.x === undefined || n.y === undefined) {
-        n.x = (Math.random() - 0.5) * 800;
-        n.y = (Math.random() - 0.5) * 600;
-      }
+      const c = n.community ?? -1;
+      if (!comms[c]) comms[c] = [];
+      comms[c].push(n);
+    });
+
+    const ckeys = Object.keys(comms).map(Number);
+    const numComms = Math.max(1, ckeys.length);
+    const baseDist = Math.max(850, 180 * Math.sqrt(numComms));
+    const centers: Record<number, { x: number; y: number }> = {};
+
+    ckeys.forEach((k, ki) => {
+      const angle = (2 * Math.PI * ki) / numComms;
+      const radius = (ki === 0 && comms[k].length > 30) ? 0 : baseDist * (0.4 + 0.6 * Math.sqrt((ki + 1) / numComms));
+      centers[k] = {
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+      };
+    });
+    commCentersRef.current = centers;
+
+    // 2. Position nodes in their community cluster initially
+    const nMap = new Map<string, GraphNode>();
+    ckeys.forEach(k => {
+      const arr = comms[k];
+      const center = centers[k] || { x: 0, y: 0 };
+      const ringRadius = 25 + 16 * Math.sqrt(arr.length);
+      arr.forEach((n, ni) => {
+        nMap.set(n.id, n);
+        if (n.x === undefined || n.y === undefined) {
+          const ang = (2 * Math.PI * ni) / arr.length;
+          const r = (ni === 0 && arr.length > 3) ? 0 : (ringRadius * (0.3 + 0.7 * ((ni % 3 + 1) / 3)));
+          n.x = center.x + Math.cos(ang) * r;
+          n.y = center.y + Math.sin(ang) * r;
+        }
+      });
     });
     nodeMapRef.current = nMap;
 
+    // 3. Setup adjacency & links
     const adj = new Map<string, Map<string, { relation: string; confidence: string; isOutgoing: boolean }>>();
     const simLinks: Array<{ source: GraphNode; target: GraphNode; relation: string; confidence: string }> = [];
 
@@ -85,15 +119,29 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     adjMapRef.current = adj;
     simLinksRef.current = simLinks;
 
-    // Build force simulation
+    // 4. Build Clustered Force Simulation with simulated annealing (alpha decay)
     const sim = d3.forceSimulation<GraphNode>(nodes)
-      .force('link', d3.forceLink<GraphNode, any>(simLinks).id(d => d.id).distance(65).strength(0.35))
-      .force('charge', d3.forceManyBody().strength(-140).distanceMax(600))
-      .force('center', d3.forceCenter(0, 0).strength(0.05))
-      .force('collision', d3.forceCollide().radius(14))
-      .alphaDecay(0.02)
+      .force('link', d3.forceLink<GraphNode, any>(simLinks).id(d => d.id).distance(d => {
+        const s = d.source as GraphNode;
+        const t = d.target as GraphNode;
+        return (s.community === t.community) ? 50 : 150;
+      }).strength(d => {
+        const s = d.source as GraphNode;
+        const t = d.target as GraphNode;
+        return (s.community === t.community) ? 0.35 : 0.08;
+      }))
+      .force('charge', d3.forceManyBody().strength(-120).distanceMax(500))
+      .force('communityX', d3.forceX<GraphNode>(d => (centers[d.community ?? -1]?.x || 0)).strength(0.06))
+      .force('communityY', d3.forceY<GraphNode>(d => (centers[d.community ?? -1]?.y || 0)).strength(0.06))
+      .force('collision', d3.forceCollide<GraphNode>().radius(d => Math.max(5, Math.min(18, 4 + (d.degree || 1) * 0.4)) + 8))
+      .alpha(1.0)
+      .alphaDecay(0.022) // Settles down smoothly within ~150 frames and stops!
+      .velocityDecay(0.35)
       .on('tick', () => {
         draw();
+      })
+      .on('end', () => {
+        setSimRunning(false);
       });
 
     simulationRef.current = sim;
@@ -144,7 +192,21 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     const pathSet = activePath ? new Set(activePath) : null;
     const activeAdj = activeNode ? adjMapRef.current.get(activeNode.id) : null;
 
-    // 1. Draw Edges
+    // 1. Draw Community Cluster Background Halos
+    const centers = commCentersRef.current;
+    if (transform.k < 1.3 && Object.keys(centers).length > 0) {
+      Object.entries(centers).forEach(([cidStr, center]) => {
+        const cid = Number(cidStr);
+        if (highlightedCommunity !== null && highlightedCommunity !== cid) return;
+        const color = communityColors[cid] || '#3b82f6';
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 80, 0, Math.PI * 2);
+        ctx.fillStyle = `${color}0f`; // 6% opacity
+        ctx.fill();
+      });
+    }
+
+    // 2. Draw Edges
     const linksToDraw = simLinksRef.current;
     linksToDraw.forEach(link => {
       const s = link.source;
@@ -173,27 +235,26 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         ctx.lineWidth = Math.max(0.8 / transform.k, 0.8);
         ctx.setLineDash([]);
       } else {
-        // Normal visible connection
         if (link.confidence === 'EXTRACTED') {
-          ctx.strokeStyle = 'rgba(148, 163, 184, 0.55)'; // Crisp light slate
-          ctx.lineWidth = Math.max(1.3 / transform.k, 1.2);
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+          ctx.lineWidth = Math.max(1.1 / transform.k, 1.1);
           ctx.setLineDash([]);
         } else if (link.confidence === 'AMBIGUOUS') {
-          ctx.strokeStyle = 'rgba(245, 158, 11, 0.65)'; // Amber
-          ctx.lineWidth = Math.max(1.3 / transform.k, 1.2);
+          ctx.strokeStyle = 'rgba(245, 158, 11, 0.55)';
+          ctx.lineWidth = Math.max(1.1 / transform.k, 1.1);
           ctx.setLineDash([3 / transform.k, 3 / transform.k]);
         } else {
-          ctx.strokeStyle = 'rgba(96, 165, 250, 0.6)'; // Blue Inferred
-          ctx.lineWidth = Math.max(1.3 / transform.k, 1.2);
+          ctx.strokeStyle = 'rgba(96, 165, 250, 0.4)';
+          ctx.lineWidth = Math.max(1.1 / transform.k, 1.1);
           ctx.setLineDash([5 / transform.k, 4 / transform.k]);
         }
       }
       ctx.stroke();
 
-      // 2. Draw Arrowheads
-      if (showArrows && (isConnected || isPathEdge || (transform.k > 0.85 && !isDimmed))) {
+      // Directional Arrowheads
+      if (showArrows && (isConnected || isPathEdge || (transform.k > 1.1 && !isDimmed))) {
         const angle = Math.atan2(t.y - s.y, t.x - s.x);
-        const headlen = isConnected || isPathEdge ? Math.max(9 / transform.k, 8) : Math.max(6 / transform.k, 5);
+        const headlen = isConnected || isPathEdge ? Math.max(8 / transform.k, 7) : Math.max(5 / transform.k, 5);
         const targetR = Math.max(4, Math.min(14, 3 + (t.degree || 1) * 0.4));
         const arrowX = t.x - Math.cos(angle) * (targetR + 3);
         const arrowY = t.y - Math.sin(angle) * (targetR + 3);
@@ -210,8 +271,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         ctx.fill();
       }
 
-      // 3. Draw Edge Relation Labels
-      if (showEdgeLabels && (isConnected || (transform.k > 1.4 && !isDimmed))) {
+      // Edge Relation Labels
+      if (showEdgeLabels && (isConnected || (transform.k > 1.5 && !isDimmed))) {
         const midX = (s.x + t.x) / 2;
         const midY = (s.y + t.y) / 2;
         ctx.font = `${Math.max(9, 10 / transform.k)}px sans-serif`;
@@ -222,7 +283,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
     ctx.setLineDash([]);
 
-    // 4. Draw Nodes
+    // 3. Draw Nodes
     nodes.forEach(n => {
       if (n.x === undefined || n.y === undefined) return;
 
@@ -272,15 +333,27 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
       ctx.globalAlpha = 1;
 
-      // Draw node labels
-      const showLabel = isSelected || isHovered || isPathNode || isNeighbor ||
-        (transform.k > 1.1 && alpha > 0.5) ||
-        (transform.k > 0.6 && (n.degree || 0) > 6);
+      // 4. Draw Clean, Non-Overlapping Labels
+      const isPrimary = isSelected || isHovered || isPathNode;
+      const showLabel = isPrimary || isNeighbor || (transform.k > 1.4 && alpha > 0.5) || (transform.k > 0.8 && (n.degree || 0) > 12);
 
       if (showLabel) {
+        const labelText = n.label || n.id;
         ctx.font = `${Math.max(10, 11 / transform.k)}px sans-serif`;
-        ctx.fillStyle = alpha > 0.5 ? '#f3f4f6' : 'rgba(156, 163, 175, 0.4)';
-        ctx.fillText(n.label || n.id, n.x + radius + 5, n.y + 4);
+        const tx = n.x + radius + 5;
+        const ty = n.y + 4;
+
+        if (isPrimary || isNeighbor) {
+          const metrics = ctx.measureText(labelText);
+          ctx.fillStyle = 'rgba(17, 24, 39, 0.88)';
+          ctx.fillRect(tx - 3, ty - 11, metrics.width + 6, 15);
+          ctx.strokeStyle = isPrimary ? '#38bdf8' : 'rgba(75, 85, 99, 0.6)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(tx - 3, ty - 11, metrics.width + 6, 15);
+        }
+
+        ctx.fillStyle = isPrimary ? '#ffffff' : isNeighbor ? '#e5e7eb' : 'rgba(209, 213, 219, 0.8)';
+        ctx.fillText(labelText, tx, ty);
       }
     });
 
@@ -295,7 +368,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
-    const newK = Math.max(0.1, Math.min(10, transform.k * zoomFactor));
+    const newK = Math.max(0.04, Math.min(8, transform.k * zoomFactor));
 
     setTransform(prev => ({
       ...prev,
@@ -334,12 +407,32 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
-    setIsDragging(true);
-    setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
+    const gPos = screenToGraph(e.clientX, e.clientY);
+    const hit = findNodeAt(gPos.x, gPos.y);
+
+    if (hit) {
+      setDraggedNode(hit);
+      hit.fx = hit.x;
+      hit.fy = hit.y;
+      if (simulationRef.current) {
+        simulationRef.current.alphaTarget(0.1).restart();
+        setSimRunning(true);
+      }
+    } else {
+      setIsDraggingCanvas(true);
+      setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging) {
+    if (draggedNode) {
+      const gPos = screenToGraph(e.clientX, e.clientY);
+      draggedNode.fx = gPos.x;
+      draggedNode.fy = gPos.y;
+      draggedNode.x = gPos.x;
+      draggedNode.y = gPos.y;
+      draw();
+    } else if (isDraggingCanvas) {
       setTransform(prev => ({
         ...prev,
         x: e.clientX - dragStart.x,
@@ -353,14 +446,23 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
-    setIsDragging(false);
-    const gPos = screenToGraph(e.clientX, e.clientY);
-    const hit = findNodeAt(gPos.x, gPos.y);
-    onSelectNode(hit);
+    if (draggedNode) {
+      draggedNode.fx = null;
+      draggedNode.fy = null;
+      setDraggedNode(null);
+      if (simulationRef.current) {
+        simulationRef.current.alphaTarget(0);
+      }
+    } else if (isDraggingCanvas) {
+      setIsDraggingCanvas(false);
+      const gPos = screenToGraph(e.clientX, e.clientY);
+      const hit = findNodeAt(gPos.x, gPos.y);
+      onSelectNode(hit);
+    }
   };
 
   const resetView = () => {
-    setTransform({ x: 0, y: 0, k: 1 });
+    setTransform({ x: 0, y: 0, k: 0.85 });
   };
 
   const toggleSimulation = () => {
@@ -369,7 +471,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       simulationRef.current.stop();
       setSimRunning(false);
     } else {
-      simulationRef.current.alpha(0.3).restart();
+      simulationRef.current.alpha(0.35).restart();
       setSimRunning(true);
     }
   };
@@ -385,7 +487,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         style={{
           width: '100%',
           height: '100%',
-          cursor: isDragging ? 'grabbing' : hoveredNode ? 'pointer' : 'grab',
+          cursor: isDraggingCanvas || draggedNode ? 'grabbing' : hoveredNode ? 'pointer' : 'grab',
           display: 'block',
         }}
       />
@@ -433,14 +535,14 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           <Tag size={16} />
         </button>
         <button
-          onClick={() => setTransform(t => ({ ...t, k: Math.min(10, t.k * 1.25) }))}
+          onClick={() => setTransform(t => ({ ...t, k: Math.min(8, t.k * 1.25) }))}
           title="Zoom In"
           style={{ background: 'transparent', border: '1px solid transparent', color: 'var(--text-primary)', padding: 6, borderRadius: 4, display: 'flex' }}
         >
           <ZoomIn size={16} />
         </button>
         <button
-          onClick={() => setTransform(t => ({ ...t, k: Math.max(0.1, t.k * 0.8) }))}
+          onClick={() => setTransform(t => ({ ...t, k: Math.max(0.04, t.k * 0.8) }))}
           title="Zoom Out"
           style={{ background: 'transparent', border: '1px solid transparent', color: 'var(--text-primary)', padding: 6, borderRadius: 4, display: 'flex' }}
         >
@@ -455,8 +557,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         </button>
         <button
           onClick={toggleSimulation}
-          title={simRunning ? "Pause Physics" : "Resume Physics"}
-          style={{ background: 'transparent', border: '1px solid transparent', color: simRunning ? 'var(--accent)' : 'var(--text-secondary)', padding: 6, borderRadius: 4, display: 'flex' }}
+          title={simRunning ? "Freeze Layout" : "Settle Layout"}
+          style={{
+            background: simRunning ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+            border: simRunning ? '1px solid var(--accent)' : '1px solid transparent',
+            color: simRunning ? 'var(--accent)' : 'var(--text-secondary)',
+            padding: 6,
+            borderRadius: 4,
+            display: 'flex',
+          }}
         >
           {simRunning ? <Pause size={16} /> : <Play size={16} />}
         </button>
@@ -482,7 +591,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span>Nodes: <strong style={{ color: 'var(--text-primary)' }}>{nodes.length}</strong></span>
           <span>Edges: <strong style={{ color: 'var(--text-primary)' }}>{edges.length}</strong></span>
-          <span style={{ color: 'var(--success)', fontWeight: 600 }}>Unlimited Engine</span>
+          <span style={{ color: simRunning ? 'var(--accent)' : 'var(--success)', fontWeight: 600 }}>
+            {simRunning ? 'Settling...' : 'Stable'}
+          </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
