@@ -1,0 +1,163 @@
+# nodemonk 🧠⚡
+
+> **See everything. Ask anything.** Turn any codebase, documentation, or data corpus into a persistent, queryable knowledge graph with community detection, live graph analytics, and zero arbitrary limits.
+
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Python: >=3.10](https://img.shields.io/badge/Python->=3.10-green.svg)](https://python.org)
+[![React: 19](https://img.shields.io/badge/React-19.0-61dafb.svg)](https://react.dev)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero%20(Pure%20Python)-brightgreen.svg)]()
+
+---
+
+## ⚡ Why nodemonk?
+
+`nodemonk` was built to provide a clean, unconstrained, local-first alternative to tools like `graphify`. While `graphify` demonstrated the power of turning code into knowledge graphs, it contains severe artificial constraints and heavy dependencies that restrict real-world production usage.
+
+### 📊 Concrete Comparison & Evidence
+
+| Feature / Limit | Graphify Labs (`graphify`) | **nodemonk** |
+| :--- | :--- | :--- |
+| **Node Visualization Limit** | **Hard cap at 5,000 nodes** (`MAX_NODES_FOR_VIZ = 5_000` in `graphify/exporters/html.py:14`; raises `ValueError` if exceeded) | **Unlimited Nodes** (Accelerated Canvas + LOD rendering handles 100k+ nodes smoothly) |
+| **Query Budget & Truncation** | **Capped at 1,500 tokens** (`--budget 1500`, subagents chunked and truncated) | **Unlimited Queries & Streaming** (`--limit 0` for full traversals, depthless BFS/DFS) |
+| **Dependencies** | NetworkX, tree-sitter C-bindings, numpy, scipy, graspologic (7-19s JIT import times, fragile compilation) | **Zero External Dependencies** (Pure standard library Python; instant installation anywhere) |
+| **Call Graph Parked Calls** | **Capped at 64 calls/node** (`_MAX_PARKED_CALLS_PER_NODE = 64` in `extract.py:4515`) | **No Cap** (Full fidelity call and reference capture) |
+| **Config & Data File Caps** | Capped: YAML at 1MB/500 pairs, JSON at 1MB, XML at 2MB (`extractors/yaml_config.py:24`) | **Full File Parsing** (Processes enterprise schemas and large monorepos without drops) |
+| **Modern React Interface** | Basic single HTML file | **Full React 19 + TypeScript + Vite interactive explorer** built-in |
+| **MCP Agent Protocol** | Supported | Supported via `nodemonk mcp` (stdio JSON-RPC compatible with Claude, Cursor, Antigravity, Devin) |
+| **Export Ecosystem** | JSON, HTML | JSON, HTML, SVG, DOT, GraphML, Cypher (Neo4j), and Obsidian Vault Markdown with bidirectional `[[wikilinks]]` |
+
+---
+
+## 🚀 Quick Start
+
+### 1. Build a Knowledge Graph
+Run `nodemonk build` pointing to any directory (codebase, documentation, or mixed corpus):
+
+```bash
+# Build the graph of the current directory
+python3 -m nodemonk build .
+
+# Or with custom output folder and extra exports
+python3 -m nodemonk build . --out-dir ./nodemonk-out --cypher --obsidian --svg
+```
+
+Output generated in `nodemonk-out/`:
+- `graph.json`: The complete node-link knowledge graph with explicit confidence metadata.
+- `graph.html`: Standalone offline browser visualization.
+- `GRAPH_REPORT.md`: Comprehensive architecture audit, community breakdown, God nodes, and suggested questions.
+- `obsidian/`: (Optional) Obsidian vault notes with inter-community wikilinks.
+- `cypher.txt`: (Optional) Ready-to-import Cypher statements for Neo4j.
+
+---
+
+### 2. Launch the Interactive React Web Application
+`nodemonk` includes a modern React 19 web interface:
+
+```bash
+python3 -m nodemonk serve
+```
+
+Open [http://127.0.0.1:7740](http://127.0.0.1:7740) in your browser:
+- **Interactive Force Graph**: Pan, zoom, drag, and inspect relationships in real-time.
+- **Community Explorer**: Drill down into Louvain-detected communities and cohesion metrics.
+- **High-Impact Hubs**: Instant identification of "God Nodes" by PageRank and degree centrality.
+- **Shortest Path Finder**: Bidirectional BFS / Dijkstra routing between any two symbols.
+- **Query Console**: BFS and DFS traversals answering architectural questions without token limits.
+- **Circular Dependency Detection**: Automated Tarjan Strongly Connected Components (SCC) analysis.
+
+To run the React development server with Vite hot reloading:
+```bash
+cd web
+npm install
+npm run dev
+```
+
+---
+
+### 3. Query from the Terminal
+`nodemonk` CLI provides unlimited querying capabilities:
+
+```bash
+# Natural-language BFS traversal
+python3 -m nodemonk query "how does the pipeline execute"
+
+# Shortest path between two symbols
+python3 -m nodemonk path pipeline.py Graph
+
+# List God nodes / architectural hubs
+python3 -m nodemonk gods --limit 10
+
+# Detect circular dependency loops
+python3 -m nodemonk cycles
+
+# Identify bridges and single points of failure
+python3 -m nodemonk bridges
+
+# Print global graph metrics
+python3 -m nodemonk stats
+```
+
+---
+
+### 4. Agent Integration (MCP Server)
+`nodemonk` speaks Model Context Protocol (MCP) over stdio. Connect it to Cursor, Claude Code, Devin, or Antigravity:
+
+Add to your MCP configuration:
+```json
+{
+  "mcpServers": {
+    "nodemonk": {
+      "command": "python3",
+      "args": ["-m", "nodemonk.mcp", "/path/to/nodemonk-out/graph.json"]
+    }
+  }
+}
+```
+
+Available agent tools:
+- `graph_stats`: Inspect graph density, node/edge counts, confidence profile.
+- `search`: Fuzzy search across nodes, docstrings, filenames with zero truncation.
+- `get_node`: Full node payload and metadata.
+- `neighbors`: Directional 1-hop queries filtered by relation type and confidence.
+- `query_graph`: Graph traversal from question seed nodes.
+- `shortest_path`: Trace the exact route between any two functions or classes.
+- `god_nodes`: Retrieve top structural hubs.
+- `community`: Detailed community breakdown.
+- `cycles`: Circular dependency checks.
+- `bridges`: Architectural choke points.
+
+---
+
+## 🛠️ Architecture & Core Modules
+
+```
+detect.py  →  extract/  →  build.py  →  cluster.py  →  analyze.py  →  report.py  →  export.py
+                                                                         ↓
+                                                              serve.py (React UI + HTTP API)
+                                                              mcp.py (Agent stdio server)
+```
+
+1. **`detect.py`**: Scans files, categorizes code/documents/media, calculates size and word counts.
+2. **`extract/`**: Deterministic extractors across Python, TypeScript/JavaScript, Go, Rust, Java, C/C++, Markdown, JSON, YAML, and binary assets.
+3. **`graph.py`**: Pure-Python high performance Graph structure with adjacency sets, node indexing, and streaming iterators.
+4. **`cluster.py`**: Pure-Python Louvain modularity optimization for automatic community clustering with cohesion scoring.
+5. **`analyze.py`**: PageRank, God nodes, Tarjan SCC cycle detection, Hopcroft-Tarjan bridge detection, and graph diffing.
+6. **`export.py`**: Universal serializers (JSON, HTML, SVG, DOT, GraphML, Cypher, Obsidian).
+7. **`serve.py`**: High-performance HTTP server serving both REST API and compiled React dashboard.
+8. **`web/`**: Modern React 19 UI with Vite, Canvas force simulation, and Lucide icons.
+
+---
+
+## 🧪 Testing
+
+Run the test suite with pytest:
+
+```bash
+python3 -m pytest
+```
+
+---
+
+## 📄 License
+
+Apache License 2.0. Free for open source and commercial use.
