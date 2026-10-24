@@ -225,22 +225,52 @@ def explain_node(G: Graph, node: str) -> dict[str, Any]:
         return {"error": f"node {node!r} not in graph"}
     nd = dict(G.get_node(node, {}) or {})
     neighbors: list[dict[str, Any]] = []
+    incoming: list[dict[str, Any]] = []
+    outgoing: list[dict[str, Any]] = []
+
     for v, d in G.nbrs(node).items():
         d = d or {}
-        neighbors.append(
-            {
-                "to": v,
-                "relation": d.get("relation", ""),
-                "confidence": d.get("confidence", ""),
-                "weight": d.get("weight"),
-            }
-        )
-    neighbors.sort(key=lambda r: (-(r["weight"] or 0.0), r["to"]))
+        v_node = G.get_node(v, {}) or {}
+        v_label = v_node.get("label") or v
+        v_file = v_node.get("source_file") or v_node.get("file")
+        v_kind = v_node.get("kind")
+        rel = d.get("relation", "links")
+        conf = d.get("confidence", "EXTRACTED")
+        weight = d.get("weight", 1.0)
+
+        entry = {
+            "id": v,
+            "to": v,
+            "node": v,
+            "label": v_label,
+            "relation": rel,
+            "confidence": conf,
+            "weight": weight,
+            "file": v_file,
+            "kind": v_kind,
+        }
+        neighbors.append(entry)
+
+        src = d.get("_src")
+        tgt = d.get("_tgt")
+        if src == node:
+            outgoing.append(entry)
+        elif tgt == node:
+            incoming.append(entry)
+        else:
+            outgoing.append(entry)
+
+    neighbors.sort(key=lambda r: (-(r["weight"] or 0.0), str(r["label"])))
+    incoming.sort(key=lambda r: (-(r["weight"] or 0.0), str(r["label"])))
+    outgoing.sort(key=lambda r: (-(r["weight"] or 0.0), str(r["label"])))
+
     return {
         "id": node,
         **{k: v for k, v in nd.items()},
         "degree": G.degree(node),
         "neighbors": neighbors,
+        "incoming": incoming,
+        "outgoing": outgoing,
     }
 
 

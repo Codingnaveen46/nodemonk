@@ -292,6 +292,8 @@ class Graph:
                 for k, v in ld.items()
                 if k not in ("source", "target", "_src", "_tgt")
             }
+            attrs["_src"] = src
+            attrs["_tgt"] = tgt
             G.add_edge(src, tgt, **attrs)
         return G
 

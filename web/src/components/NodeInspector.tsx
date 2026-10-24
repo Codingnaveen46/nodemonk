@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { GraphNode } from '../types';
-import { X, FileCode, Tag, Network, ArrowDownLeft, ArrowUpRight, ShieldCheck, Compass } from 'lucide-react';
+import { X, FileCode, ArrowDownLeft, ArrowUpRight, Network } from 'lucide-react';
 
 interface NodeInspectorProps {
   node: GraphNode | null;
@@ -34,10 +34,11 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   if (!node) return null;
 
   const color = (node.community !== undefined && communityColors[node.community]) || '#3b82f6';
+  const totalConns = (details?.neighbors?.length) || (node.degree) || 0;
 
   return (
     <div style={{
-      width: 340,
+      width: 360,
       background: 'var(--bg-secondary)',
       borderLeft: '1px solid var(--border)',
       display: 'flex',
@@ -45,6 +46,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
       height: '100%',
       flexShrink: 0,
       zIndex: 15,
+      boxShadow: '-4px 0 20px rgba(0, 0, 0, 0.3)',
     }}>
       {/* Header */}
       <div style={{
@@ -101,6 +103,16 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               Comm #{node.community}
             </span>
           )}
+          <span style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            padding: '2px 8px',
+            borderRadius: 4,
+            fontSize: 11,
+            color: '#10b981',
+          }}>
+            {totalConns} connections
+          </span>
         </div>
 
         {/* Source File Location */}
@@ -143,74 +155,178 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           </div>
         )}
 
-        {/* Neighbors / Edges */}
-        {details && (
+        {/* Connections Section */}
+        {loading ? (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>
+            Loading connections...
+          </div>
+        ) : details ? (
           <div>
-            {details.incoming && details.incoming.length > 0 && (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>
-                  <ArrowDownLeft size={13} color="var(--accent)" />
-                  <span>CALLED / IMPORTED BY ({details.incoming.length})</span>
+            {/* Outgoing Connections */}
+            {details.outgoing && details.outgoing.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#10b981', marginBottom: 6, fontWeight: 600 }}>
+                  <ArrowUpRight size={14} />
+                  <span>CALLS / USES OUT ({details.outgoing.length})</span>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {details.incoming.map((inc: any, idx: number) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {details.outgoing.map((out: any, idx: number) => (
                     <div
                       key={idx}
-                      onClick={() => onSelectNodeById(inc.node || inc.id)}
+                      onClick={() => onSelectNodeById(out.node || out.id || out.to)}
                       style={{
                         padding: '6px 8px',
                         background: 'var(--bg-card)',
-                        borderRadius: 4,
+                        border: '1px solid var(--border)',
+                        borderRadius: 6,
                         fontSize: 11,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                       }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-card)')}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.borderColor = '#10b981';
+                        e.currentTarget.style.background = 'var(--bg-hover)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.borderColor = 'var(--border)';
+                        e.currentTarget.style.background = 'var(--bg-card)';
+                      }}
                     >
-                      <span style={{ fontWeight: 500 }}>{inc.label || inc.node || inc.id}</span>
-                      <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{inc.relation || 'links'}</span>
+                      <div style={{ minWidth: 0, paddingRight: 6 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {out.label || out.node || out.id}
+                        </div>
+                        {out.file && (
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {out.file}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 5px', borderRadius: 4 }}>
+                          {out.relation || 'calls'}
+                        </span>
+                        <span style={{
+                          fontSize: 9,
+                          color: out.confidence === 'INFERRED' ? '#60a5fa' : '#9ca3af',
+                          background: 'var(--bg-secondary)',
+                          padding: '2px 4px',
+                          borderRadius: 3
+                        }}>
+                          {out.confidence || 'EXT'}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {details.outgoing && details.outgoing.length > 0 && (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>
-                  <ArrowUpRight size={13} color="#10b981" />
-                  <span>CALLS / USES OUT ({details.outgoing.length})</span>
+            {/* Incoming Connections */}
+            {details.incoming && details.incoming.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#38bdf8', marginBottom: 6, fontWeight: 600 }}>
+                  <ArrowDownLeft size={14} />
+                  <span>CALLED / IMPORTED BY ({details.incoming.length})</span>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {details.outgoing.map((out: any, idx: number) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {details.incoming.map((inc: any, idx: number) => (
                     <div
                       key={idx}
-                      onClick={() => onSelectNodeById(out.node || out.id)}
+                      onClick={() => onSelectNodeById(inc.node || inc.id || inc.to)}
                       style={{
                         padding: '6px 8px',
                         background: 'var(--bg-card)',
-                        borderRadius: 4,
+                        border: '1px solid var(--border)',
+                        borderRadius: 6,
                         fontSize: 11,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                       }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-card)')}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.borderColor = '#38bdf8';
+                        e.currentTarget.style.background = 'var(--bg-hover)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.borderColor = 'var(--border)';
+                        e.currentTarget.style.background = 'var(--bg-card)';
+                      }}
                     >
-                      <span style={{ fontWeight: 500 }}>{out.label || out.node || out.id}</span>
-                      <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{out.relation || 'links'}</span>
+                      <div style={{ minWidth: 0, paddingRight: 6 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {inc.label || inc.node || inc.id}
+                        </div>
+                        {inc.file && (
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {inc.file}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 5px', borderRadius: 4 }}>
+                          {inc.relation || 'links'}
+                        </span>
+                        <span style={{
+                          fontSize: 9,
+                          color: inc.confidence === 'INFERRED' ? '#60a5fa' : '#9ca3af',
+                          background: 'var(--bg-secondary)',
+                          padding: '2px 4px',
+                          borderRadius: 3
+                        }}>
+                          {inc.confidence || 'EXT'}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+
+            {/* Fallback to neighbors if incoming & outgoing empty */}
+            {(!details.incoming?.length && !details.outgoing?.length && details.neighbors?.length > 0) && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6, fontWeight: 600 }}>
+                  <Network size={14} />
+                  <span>ALL CONNECTED NEIGHBORS ({details.neighbors.length})</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {details.neighbors.map((nb: any, idx: number) => (
+                    <div
+                      key={idx}
+                      onClick={() => onSelectNodeById(nb.node || nb.id || nb.to)}
+                      style={{
+                        padding: '6px 8px',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 6,
+                        fontSize: 11,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                    >
+                      <span style={{ fontWeight: 500 }}>{nb.label || nb.to || nb.id}</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{nb.relation || 'links'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(!details.neighbors || details.neighbors.length === 0) && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', padding: '10px 0' }}>
+                Isolated node with no edge connections.
+              </div>
+            )}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

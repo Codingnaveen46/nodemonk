@@ -113,7 +113,11 @@ ckeys.forEach((k,ki)=>{
   });
 });
 // edge arrays once
-const EL = L.map(l=>[id2i.get(l.s), id2i.get(l.t), l.r||"", l.c||"EXTRACTED", l.w??1]).filter(e=>e[0]!==undefined&&e[1]!==undefined);
+const EL = L.map(l => {
+  const s = typeof l.s === "number" ? l.s : id2i.get(l.s);
+  const t = typeof l.t === "number" ? l.t : id2i.get(l.t);
+  return [s, t, l.r || "", l.c || "EXTRACTED", l.w ?? 1];
+}).filter(e => e[0] !== undefined && e[1] !== undefined && e[0] >= 0 && e[1] >= 0);
 
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
@@ -174,18 +178,50 @@ function render(){
   ctx.translate(W/2,H/2); ctx.scale(scale,scale); ctx.translate(tX,tY);
   const inv = 1/scale;
   // edges
-  ctx.lineWidth = 1*inv;
   for(const [a,b,rel,conf] of EL){
     const na=N[a], nb=N[b];
     if(!na||!nb) continue;
     if(CommFilter!=null && na.com!=CommFilter && nb.com!=CommFilter) continue;
-    const isSel = selI>=0 && !(a===selI||b===selI);
-    const dimmed = selI>=0 && isSel;
-    ctx.strokeStyle = dimmed ? "rgba(31,41,55,.35)" :
-      conf==="EXTRACTED" ? "rgba(99,179,237,.5)" :
-      conf==="AMBIGUOUS" ? "rgba(217,119,6,.35)" : "rgba(74,124,246,.3)";
-    ctx.beginPath(); ctx.moveTo(na.x,na.y); ctx.lineTo(nb.x,nb.y); ctx.stroke();
+    const isConn = (selI>=0 && (a===selI||b===selI)) || (hoverI>=0 && (a===hoverI||b===hoverI));
+    const isDimmed = (selI>=0 || hoverI>=0) && !isConn;
+
+    if (isConn) {
+      ctx.lineWidth = Math.max(2.5 * inv, 2.5);
+      ctx.strokeStyle = "#38bdf8";
+      ctx.setLineDash([]);
+    } else if (isDimmed) {
+      ctx.lineWidth = 0.8 * inv;
+      ctx.strokeStyle = "rgba(75, 85, 99, 0.15)";
+      ctx.setLineDash([]);
+    } else {
+      ctx.lineWidth = Math.max(1.2 * inv, 1.2);
+      ctx.strokeStyle = conf === "EXTRACTED" ? "rgba(96, 165, 250, 0.65)" :
+                        conf === "AMBIGUOUS" ? "rgba(245, 158, 11, 0.6)" : "rgba(168, 85, 247, 0.55)";
+      if (conf === "INFERRED") ctx.setLineDash([4 * inv, 3 * inv]);
+      else ctx.setLineDash([]);
+    }
+    ctx.beginPath();
+    ctx.moveTo(na.x, na.y);
+    ctx.lineTo(nb.x, nb.y);
+    ctx.stroke();
+
+    // Draw directional arrows on connected edges or when zoomed in
+    if (isConn || (scale > 1.2 && !isDimmed)) {
+      const angle = Math.atan2(nb.y - na.y, nb.x - na.x);
+      const headlen = 8 * inv;
+      const targetR = 2 + Math.pow(nb.deg/bigDegree, 0.5)*7;
+      const arrowX = nb.x - Math.cos(angle) * (targetR + 2);
+      const arrowY = nb.y - Math.sin(angle) * (targetR + 2);
+      ctx.fillStyle = isConn ? "#38bdf8" : "rgba(148, 163, 184, 0.8)";
+      ctx.beginPath();
+      ctx.moveTo(arrowX, arrowY);
+      ctx.lineTo(arrowX - headlen * Math.cos(angle - Math.PI / 6), arrowY - headlen * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(arrowX - headlen * Math.cos(angle + Math.PI / 6), arrowY - headlen * Math.sin(angle + Math.PI / 6));
+      ctx.closePath();
+      ctx.fill();
+    }
   }
+  ctx.setLineDash([]);
   // nodes
   for(let i=0;i<N.length;i++){
     const n=N[i];
