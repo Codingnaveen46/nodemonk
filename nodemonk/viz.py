@@ -72,8 +72,10 @@ button.active { border-color:var(--accent); color:var(--accent); }
     <div id="hits"></div>
     <div class="legend" id="legend"></div>
     <div class="controls">
-      <button id="btnRelax" class="active">physics</button>
-      <button id="btnLabels">labels</button>
+      <button id="btnArch">architecture flow</button>
+      <button id="btnIslands" class="active">islands</button>
+      <button id="btnCardView" class="active">card style</button>
+      <button id="btnRelax">settle / freeze</button>
       <button id="btnReset">reset view</button>
       <button id="btnExport">export png</button>
     </div>
@@ -154,9 +156,57 @@ let W = 0, H = 0, DPR = 1, tX = 0, tY = 0, scale = 0.85;
 let draggingCanvas = false, draggedNode = null, moved = false;
 let hoverI = -1, selI = -1;
 let physics = true, showLabels = false, CommFilter = null;
+let layoutMode = "islands", cardView = true;
 let alpha = 1.0;
 const ALPHA_DECAY = 0.982;
 const MIN_ALPHA = 0.003;
+
+function applyArchitectureLayout() {
+  layoutMode = "architecture";
+  physics = false;
+  alpha = 0;
+  const tierMap = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [] };
+  N.forEach(n => {
+    const p = (n.f || n.id).toLowerCase();
+    if (p.includes("cli") || p.includes("__main__") || p.includes("hook")) tierMap[0].push(n);
+    else if (p.includes("pipeline") || p.includes("build") || p.includes("detect") || p.includes("manifest")) tierMap[1].push(n);
+    else if (p.includes("graph") || p.includes("cluster") || p.includes("analyze") || p.includes("query")) tierMap[2].push(n);
+    else if (p.includes("extract") || p.includes("ast") || p.includes("resolution") || p.includes("ingest") || p.includes("security")) tierMap[3].push(n);
+    else if (p.includes("export") || p.includes("serve") || p.includes("viz") || p.includes("mcp") || p.includes("report")) tierMap[4].push(n);
+    else tierMap[5].push(n);
+  });
+  const tierX = [-700, -380, -60, 260, 580, 900];
+  Object.keys(tierMap).forEach(t => {
+    const arr = tierMap[t];
+    const sx = tierX[t] || 0;
+    const h = Math.max(500, arr.length * 36);
+    arr.forEach((n, idx) => {
+      n.x = sx + (Math.random() - 0.5) * 40;
+      n.y = -h / 2 + (idx / Math.max(1, arr.length - 1)) * h;
+      n.vx = 0; n.vy = 0;
+    });
+  });
+  scale = 0.65; tX = 0; tY = 0;
+}
+
+function applyIslandsLayout() {
+  layoutMode = "islands";
+  physics = true;
+  alpha = 0.4;
+  ckeys.forEach(k => {
+    const arr = comms[k];
+    const center = commCenters[k];
+    const ringR = 25 + 16 * Math.sqrt(arr.length);
+    arr.forEach((n, ni) => {
+      const ang = (2 * Math.PI * ni) / arr.length;
+      const r = (ni === 0 && arr.length > 3) ? 0 : (ringR * (0.3 + 0.7 * ((ni % 3 + 1) / 3)));
+      n.x = center.x + Math.cos(ang) * r;
+      n.y = center.y + Math.sin(ang) * r;
+      n.vx = 0; n.vy = 0;
+    });
+  });
+  scale = 0.85; tX = 0; tY = 0;
+}
 
 function resize() {
   const r = canvas.getBoundingClientRect();
@@ -282,7 +332,7 @@ function stepPhysics() {
   alpha *= ALPHA_DECAY;
 }
 
-// 6. Crisp, Readable Rendering (No Text Stack/Overlap)
+// 6. Crisp, Readable Rendering with Architecture Flow & Capsule Cards
 function render() {
   ctx.save();
   ctx.clearRect(0, 0, W, H);
@@ -291,8 +341,29 @@ function render() {
   ctx.translate(tX, tY);
   const inv = 1 / scale;
 
-  // A. Draw Community Cluster Halos & Badges
-  if (scale < 1.4) {
+  // A. Draw Architectural Tier Headers if in Architecture Flow
+  if (layoutMode === "architecture" && scale > 0.35) {
+    const headers = [
+      { label: "ENTRYPOINTS & CLI", x: -700, col: "#38bdf8" },
+      { label: "ORCHESTRATION & BUILD", x: -380, col: "#10b981" },
+      { label: "CORE GRAPH ENGINES", x: -60, col: "#f59e0b" },
+      { label: "EXTRACTORS & RESOLUTION", x: 260, col: "#8b5cf6" },
+      { label: "EXPORTERS & SERVERS", x: 580, col: "#ec4899" },
+      { label: "TESTS & ASSETS", x: 900, col: "#9ca3af" },
+    ];
+    ctx.font = `bold ${Math.max(12, 13 * inv)}px system-ui, sans-serif`;
+    headers.forEach(h => {
+      ctx.fillStyle = h.col + "18";
+      ctx.fillRect(h.x - 120, -520, 240, 28);
+      ctx.strokeStyle = h.col + "44";
+      ctx.strokeRect(h.x - 120, -520, 240, 28);
+      ctx.fillStyle = h.col;
+      ctx.fillText(h.label, h.x - 100, -502);
+    });
+  }
+
+  // B. Draw Community Cluster Halos & Badges if in Islands Mode
+  if (layoutMode === "islands" && scale < 1.4) {
     for (const k of ckeys) {
       const center = commCenters[k];
       const arr = comms[k];
@@ -313,7 +384,7 @@ function render() {
     }
   }
 
-  // B. Draw Edges
+  // C. Draw Curved Bezier Edges
   for (const [a, b, rel, conf] of EL) {
     const na = N[a], nb = N[b];
     if (!na || !nb) continue;
@@ -329,7 +400,7 @@ function render() {
       ctx.setLineDash([]);
     } else if (isDimmed) {
       ctx.lineWidth = 0.7 * inv;
-      ctx.strokeStyle = "rgba(75, 85, 99, 0.12)";
+      ctx.strokeStyle = "rgba(75, 85, 99, 0.1)";
       ctx.setLineDash([]);
     } else {
       ctx.lineWidth = Math.max(1.1 * inv, 1.1);
@@ -339,17 +410,28 @@ function render() {
       else ctx.setLineDash([]);
     }
 
+    // Curved Bezier
+    const dx = nb.x - na.x;
+    const dy = nb.y - na.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const midX = (na.x + nb.x) / 2;
+    const midY = (na.y + nb.y) / 2;
+    const curve = Math.min(22, dist * 0.08);
+    const cpX = midX - (dy / dist) * curve;
+    const cpY = midY + (dx / dist) * curve;
+
     ctx.beginPath();
     ctx.moveTo(na.x, na.y);
-    ctx.lineTo(nb.x, nb.y);
+    ctx.quadraticCurveTo(cpX, cpY, nb.x, nb.y);
     ctx.stroke();
 
     // Directional Arrowheads
     if (isConn || (scale > 1.2 && !isDimmed)) {
-      const angle = Math.atan2(nb.y - na.y, nb.x - na.x);
+      const angle = Math.atan2(nb.y - cpY, nb.x - cpX);
       const headlen = isConn ? Math.max(8 * inv, 7) : Math.max(5 * inv, 5);
-      const arrowX = nb.x - Math.cos(angle) * (nb.r + 3);
-      const arrowY = nb.y - Math.sin(angle) * (nb.r + 3);
+      const targetOffset = cardView && scale > 0.55 ? 16 : (nb.r + 3);
+      const arrowX = nb.x - Math.cos(angle) * targetOffset;
+      const arrowY = nb.y - Math.sin(angle) * targetOffset;
       ctx.fillStyle = isConn ? ((selI >= 0 && a === selI) || (hoverI >= 0 && a === hoverI) ? "#10b981" : "#38bdf8") : "rgba(148, 163, 184, 0.7)";
       ctx.beginPath();
       ctx.moveTo(arrowX, arrowY);
@@ -361,7 +443,7 @@ function render() {
   }
   ctx.setLineDash([]);
 
-  // C. Draw Nodes
+  // D. Draw Nodes (Capsule Cards vs Minimal Dots)
   for (let i = 0; i < N.length; i++) {
     const n = N[i];
     if (CommFilter != null && n.com !== CommFilter) continue;
@@ -371,54 +453,83 @@ function render() {
     const isNbr = nbrSet.has(i);
     const dimmed = (selI >= 0 || hoverI >= 0) && !isSel && !isHover && !isNbr;
 
-    ctx.fillStyle = dimmed ? "rgba(55, 65, 81, 0.3)" : n.col;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, isSel || isHover ? n.r + 3 : n.r, 0, Math.PI * 2);
-    ctx.fill();
+    const showCard = cardView && (scale > 0.55 || isSel || isHover || isNbr);
 
-    if (isSel) {
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = Math.max(2.5 * inv, 2.5);
+    if (showCard) {
+      // Capsule Card
+      const label = (n.l || n.id).slice(0, 30);
+      ctx.font = "500 11px system-ui, sans-serif";
+      const tw = ctx.measureText(label).width;
+      const w = Math.max(70, tw + 32);
+      const h = 22;
+      const x = n.x - w / 2;
+      const y = n.y - h / 2;
+
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, 6);
+      ctx.fillStyle = dimmed ? "rgba(15, 23, 42, 0.3)" : "rgba(15, 23, 42, 0.94)";
+      ctx.fill();
+
+      ctx.strokeStyle = isSel ? "#ffffff" : isHover ? "#38bdf8" : isNbr ? n.col : (n.col + "88");
+      ctx.lineWidth = isSel ? 2 : isHover ? 1.5 : 1;
       ctx.stroke();
-    } else if (isHover || isNbr) {
-      ctx.strokeStyle = isHover ? "#38bdf8" : (n.col || "#ffffff");
-      ctx.lineWidth = Math.max(2 * inv, 1.8);
-      ctx.stroke();
+
+      if (!dimmed) {
+        // Glyph Badge
+        ctx.beginPath();
+        ctx.roundRect(x + 2, y + 2, 16, h - 4, 3);
+        ctx.fillStyle = n.col + "28";
+        ctx.fill();
+        ctx.fillStyle = n.col;
+        ctx.font = "bold 9px monospace";
+        ctx.textAlign = "center";
+        const glyph = (n.l || "").endsWith("()") ? "ƒ" : (n.id || "").startsWith("class::") ? "C" : (n.f ? "📄" : "•");
+        ctx.fillText(glyph, x + 10, y + 14);
+
+        // Label
+        ctx.fillStyle = isSel ? "#ffffff" : "#f3f4f6";
+        ctx.font = "500 11px system-ui, sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(label, x + 23, y + 15);
+      }
+    } else {
+      // Minimal Dot
+      ctx.fillStyle = dimmed ? "rgba(55, 65, 81, 0.3)" : n.col;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, isSel || isHover ? n.r + 3 : n.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (isSel) {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = Math.max(2.5 * inv, 2.5);
+        ctx.stroke();
+      } else if (isHover || isNbr) {
+        ctx.strokeStyle = isHover ? "#38bdf8" : (n.col || "#ffffff");
+        ctx.lineWidth = Math.max(2 * inv, 1.8);
+        ctx.stroke();
+      }
+
+      if (isSel || isHover || isNbr) {
+        const text = n.l || n.id;
+        ctx.font = "11px system-ui, sans-serif";
+        const tw = ctx.measureText(text).width;
+        ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+        ctx.fillRect(n.x + n.r + 4, n.y - 10, tw + 8, 18);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+        ctx.strokeRect(n.x + n.r + 4, n.y - 10, tw + 8, 18);
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "left";
+        ctx.fillText(text, n.x + n.r + 8, n.y + 3);
+      }
     }
   }
 
-  // D. Draw Labels - Clean & Non-Overlapping
-  const activeI = hoverI >= 0 ? hoverI : selI;
-  ctx.font = `${Math.max(10, 11 * inv)}px system-ui, sans-serif`;
+  ctx.restore();
 
-  for (let i = 0; i < N.length; i++) {
-    const n = N[i];
-    if (CommFilter != null && n.com !== CommFilter) continue;
-
-    const isPrimary = (i === activeI);
-    const isAdjacent = (activeI >= 0 && nbrSet.has(i));
-    const isTopHub = (scale > 0.8 && n.deg >= bigDegree * 0.45);
-    const shouldShow = isPrimary || isAdjacent || showLabels || (scale > 1.6) || isTopHub;
-
-    if (!shouldShow) continue;
-
-    const text = (n.l || n.id).slice(0, 40);
-    const tx = n.x + n.r + 5;
-    const ty = n.y + 4;
-
-    // Draw pill background for active/neighbor labels for perfect contrast
-    if (isPrimary || isAdjacent) {
-      const metrics = ctx.measureText(text);
-      ctx.fillStyle = "rgba(17, 24, 39, 0.88)";
-      ctx.fillRect(tx - 3, ty - 11, metrics.width + 6, 15);
-      ctx.strokeStyle = isPrimary ? "#38bdf8" : "rgba(75, 85, 99, 0.6)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(tx - 3, ty - 11, metrics.width + 6, 15);
-    }
-
-    ctx.fillStyle = isPrimary ? "#ffffff" : isAdjacent ? "#e5e7eb" : "rgba(209, 213, 219, 0.8)";
-    ctx.fillText(text, tx, ty);
-  }
+  // Status indicator
+  const stateStr = layoutMode === "architecture" ? "Architecture Flow" : (alpha < MIN_ALPHA ? "stable (frozen)" : `settling (${Math.round((1 - alpha) * 100)}%)`);
+  status.textContent = `${N.length.toLocaleString()} nodes · ${L.length.toLocaleString()} edges · ${stateStr} · zoom ${scale.toFixed(2)}x`;
+}
 
   ctx.restore();
 
@@ -632,7 +743,28 @@ function buildLegend() {
 }
 
 // Control Buttons
+const btnArch = document.getElementById("btnArch");
+const btnIslands = document.getElementById("btnIslands");
+const btnCardView = document.getElementById("btnCardView");
 const btnRelax = document.getElementById("btnRelax");
+
+btnArch.onclick = () => {
+  applyArchitectureLayout();
+  btnArch.classList.add("active");
+  btnIslands.classList.remove("active");
+};
+
+btnIslands.onclick = () => {
+  applyIslandsLayout();
+  btnIslands.classList.add("active");
+  btnArch.classList.remove("active");
+};
+
+btnCardView.onclick = () => {
+  cardView = !cardView;
+  btnCardView.classList.toggle("active", cardView);
+};
+
 btnRelax.onclick = (e) => {
   if (alpha < MIN_ALPHA) {
     // Settle again
@@ -644,11 +776,6 @@ btnRelax.onclick = (e) => {
     alpha = 0;
     btnRelax.textContent = "settle";
   }
-};
-
-document.getElementById("btnLabels").onclick = (e) => {
-  showLabels = !showLabels;
-  e.target.classList.toggle("active", showLabels);
 };
 
 document.getElementById("btnReset").onclick = () => {
