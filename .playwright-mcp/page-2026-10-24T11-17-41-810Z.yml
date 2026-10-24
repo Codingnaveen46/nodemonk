@@ -1,0 +1,470 @@
+- generic [ref=f3e3]:
+  - banner [ref=f3e4]:
+    - generic [ref=f3e5]:
+      - generic [ref=f3e6]: "N"
+      - generic [ref=f3e7]: nodemonkknowledge graph
+    - generic [ref=f3e8]:
+      - generic [ref=f3e13]:
+        - text: "Nodes:"
+        - strong [ref=f3e14]: "491"
+      - generic [ref=f3e18]:
+        - text: "Edges:"
+        - strong [ref=f3e19]: 1,179
+      - generic [ref=f3e21]:
+        - text: "Avg Degree:"
+        - strong [ref=f3e22]: "4.80"
+      - generic [ref=f3e24]:
+        - text: "Communities:"
+        - strong [ref=f3e25]: "82"
+      - generic [ref=f3e26]: "Extracted: 0"
+    - generic [ref=f3e31]:
+      - button "Export JSON" [ref=f3e32] [cursor=pointer]
+      - button "Cypher / Neo4j" [ref=f3e37] [cursor=pointer]
+  - generic [ref=f3e41]:
+    - generic [ref=f3e42]:
+      - textbox "Search nodes or functions..." [ref=f3e48]
+      - generic [ref=f3e49]:
+        - button "Communities" [ref=f3e50] [cursor=pointer]
+        - button "Hubs & God Nodes" [ref=f3e55] [cursor=pointer]
+        - button "Shortest Path Finder" [ref=f3e58] [cursor=pointer]
+        - button "Query Traversal" [ref=f3e61] [cursor=pointer]
+        - button "Cycles" [ref=f3e64] [cursor=pointer]
+      - generic [ref=f3e71]:
+        - generic [ref=f3e72]: Communities (82)
+        - generic [ref=f3e79]:
+          - generic [ref=f3e80] [cursor=pointer]:
+            - generic [ref=f3e83]:
+              - generic [ref=f3e84]: pipeline.py
+              - generic [ref=f3e85]: "Cohesion: 80%"
+            - generic [ref=f3e86]: "43"
+          - generic [ref=f3e87] [cursor=pointer]:
+            - generic [ref=f3e90]:
+              - generic [ref=f3e91]: test_query_and_export.py
+              - generic [ref=f3e92]: "Cohesion: 80%"
+            - generic [ref=f3e93]: "38"
+          - generic [ref=f3e94] [cursor=pointer]:
+            - generic [ref=f3e97]:
+              - generic [ref=f3e98]: Graph
+              - generic [ref=f3e99]: "Cohesion: 80%"
+            - generic [ref=f3e100]: "33"
+          - generic [ref=f3e101] [cursor=pointer]:
+            - generic [ref=f3e104]:
+              - generic [ref=f3e105]: README
+              - generic [ref=f3e106]: "Cohesion: 80%"
+            - generic [ref=f3e107]: "32"
+          - generic [ref=f3e108] [cursor=pointer]:
+            - generic [ref=f3e111]:
+              - generic [ref=f3e112]: pyproject.toml
+              - generic [ref=f3e113]: "Cohesion: 80%"
+            - generic [ref=f3e114]: "24"
+          - generic [ref=f3e115] [cursor=pointer]:
+            - generic [ref=f3e118]:
+              - generic [ref=f3e119]: App.tsx
+              - generic [ref=f3e120]: "Cohesion: 80%"
+            - generic [ref=f3e121]: "15"
+          - generic [ref=f3e122] [cursor=pointer]:
+            - generic [ref=f3e125]:
+              - generic [ref=f3e126]: cli.py
+              - generic [ref=f3e127]: "Cohesion: 80%"
+            - generic [ref=f3e128]: "13"
+          - generic [ref=f3e129] [cursor=pointer]:
+            - generic [ref=f3e132]:
+              - generic [ref=f3e133]: package.json
+              - generic [ref=f3e134]: "Cohesion: 80%"
+            - generic [ref=f3e135]: "11"
+          - generic [ref=f3e136] [cursor=pointer]:
+            - generic [ref=f3e139]:
+              - generic [ref=f3e140]: hook.py
+              - generic [ref=f3e141]: "Cohesion: 80%"
+            - generic [ref=f3e142]: "9"
+          - generic [ref=f3e143] [cursor=pointer]:
+            - generic [ref=f3e146]:
+              - generic [ref=f3e147]: ingest.py
+              - generic [ref=f3e148]: "Cohesion: 80%"
+            - generic [ref=f3e149]: "8"
+          - generic [ref=f3e150] [cursor=pointer]:
+            - generic [ref=f3e153]:
+              - generic [ref=f3e154]: mcp.py
+              - generic [ref=f3e155]: "Cohesion: 80%"
+            - generic [ref=f3e156]: "8"
+          - generic [ref=f3e157] [cursor=pointer]:
+            - generic [ref=f3e160]:
+              - generic [ref=f3e161]: _load
+              - generic [ref=f3e162]: "Cohesion: 80%"
+            - generic [ref=f3e163]: "8"
+          - generic [ref=f3e164] [cursor=pointer]:
+            - generic [ref=f3e167]:
+              - generic [ref=f3e168]: __init__.py
+              - generic [ref=f3e169]: "Cohesion: 80%"
+            - generic [ref=f3e170]: "7"
+          - generic [ref=f3e171] [cursor=pointer]:
+            - generic [ref=f3e174]:
+              - generic [ref=f3e175]: external dependency
+              - generic [ref=f3e176]: "Cohesion: 80%"
+            - generic [ref=f3e177]: "7"
+          - generic [ref=f3e178] [cursor=pointer]:
+            - generic [ref=f3e181]:
+              - generic [ref=f3e182]: types.ts
+              - generic [ref=f3e183]: "Cohesion: 80%"
+            - generic [ref=f3e184]: "7"
+          - generic [ref=f3e185] [cursor=pointer]:
+            - generic [ref=f3e188]:
+              - generic [ref=f3e189]: detect.py
+              - generic [ref=f3e190]: "Cohesion: 80%"
+            - generic [ref=f3e191]: "6"
+          - generic [ref=f3e192] [cursor=pointer]:
+            - generic [ref=f3e195]:
+              - generic [ref=f3e196]: javascript.py
+              - generic [ref=f3e197]: "Cohesion: 80%"
+            - generic [ref=f3e198]: "6"
+          - generic [ref=f3e199] [cursor=pointer]:
+            - generic [ref=f3e202]:
+              - generic [ref=f3e203]: resolution.py
+              - generic [ref=f3e204]: "Cohesion: 80%"
+            - generic [ref=f3e205]: "6"
+          - generic [ref=f3e206] [cursor=pointer]:
+            - generic [ref=f3e209]:
+              - generic [ref=f3e210]: fsutil.py
+              - generic [ref=f3e211]: "Cohesion: 80%"
+            - generic [ref=f3e212]: "6"
+          - generic [ref=f3e213] [cursor=pointer]:
+            - generic [ref=f3e216]:
+              - generic [ref=f3e217]: report.py
+              - generic [ref=f3e218]: "Cohesion: 80%"
+            - generic [ref=f3e219]: "6"
+          - generic [ref=f3e220] [cursor=pointer]:
+            - generic [ref=f3e223]:
+              - generic [ref=f3e224]: package-lock.json
+              - generic [ref=f3e225]: "Cohesion: 80%"
+            - generic [ref=f3e226]: "6"
+          - generic [ref=f3e227] [cursor=pointer]:
+            - generic [ref=f3e230]:
+              - generic [ref=f3e231]: Print global graph metrics
+              - generic [ref=f3e232]: "Cohesion: 80%"
+            - generic [ref=f3e233]: "5"
+          - generic [ref=f3e234] [cursor=pointer]:
+            - generic [ref=f3e237]:
+              - generic [ref=f3e238]: build.py
+              - generic [ref=f3e239]: "Cohesion: 80%"
+            - generic [ref=f3e240]: "5"
+          - generic [ref=f3e241] [cursor=pointer]:
+            - generic [ref=f3e244]:
+              - generic [ref=f3e245]: cluster.py
+              - generic [ref=f3e246]: "Cohesion: 80%"
+            - generic [ref=f3e247]: "5"
+          - generic [ref=f3e248] [cursor=pointer]:
+            - generic [ref=f3e251]:
+              - generic [ref=f3e252]: external dependency
+              - generic [ref=f3e253]: "Cohesion: 80%"
+            - generic [ref=f3e254]: "5"
+          - generic [ref=f3e255] [cursor=pointer]:
+            - generic [ref=f3e258]:
+              - generic [ref=f3e259]: jvm.py
+              - generic [ref=f3e260]: "Cohesion: 80%"
+            - generic [ref=f3e261]: "5"
+          - generic [ref=f3e262] [cursor=pointer]:
+            - generic [ref=f3e265]:
+              - generic [ref=f3e266]: markdown.py
+              - generic [ref=f3e267]: "Cohesion: 80%"
+            - generic [ref=f3e268]: "5"
+          - generic [ref=f3e269] [cursor=pointer]:
+            - generic [ref=f3e272]:
+              - generic [ref=f3e273]: python_ast.py
+              - generic [ref=f3e274]: "Cohesion: 80%"
+            - generic [ref=f3e275]: "5"
+          - generic [ref=f3e276] [cursor=pointer]:
+            - generic [ref=f3e279]:
+              - generic [ref=f3e280]: query.py
+              - generic [ref=f3e281]: "Cohesion: 80%"
+            - generic [ref=f3e282]: "5"
+          - generic [ref=f3e283] [cursor=pointer]:
+            - generic [ref=f3e286]:
+              - generic [ref=f3e287]: watch.py
+              - generic [ref=f3e288]: "Cohesion: 80%"
+            - generic [ref=f3e289]: "5"
+          - generic [ref=f3e290] [cursor=pointer]:
+            - generic [ref=f3e293]:
+              - generic [ref=f3e294]: search_nodes
+              - generic [ref=f3e295]: "Cohesion: 80%"
+            - generic [ref=f3e296]: "5"
+          - generic [ref=f3e297] [cursor=pointer]:
+            - generic [ref=f3e300]:
+              - generic [ref=f3e301]: extract_python.ScopeVisitor
+              - generic [ref=f3e302]: "Cohesion: 80%"
+            - generic [ref=f3e303]: "5"
+          - generic [ref=f3e304] [cursor=pointer]:
+            - generic [ref=f3e307]:
+              - generic [ref=f3e308]: external dependency
+              - generic [ref=f3e309]: "Cohesion: 80%"
+            - generic [ref=f3e310]: "4"
+          - generic [ref=f3e311] [cursor=pointer]:
+            - generic [ref=f3e314]:
+              - generic [ref=f3e315]: security.py
+              - generic [ref=f3e316]: "Cohesion: 80%"
+            - generic [ref=f3e317]: "4"
+          - generic [ref=f3e318] [cursor=pointer]:
+            - generic [ref=f3e321]:
+              - generic [ref=f3e322]: serve.py
+              - generic [ref=f3e323]: "Cohesion: 80%"
+            - generic [ref=f3e324]: "4"
+          - generic [ref=f3e325] [cursor=pointer]:
+            - generic [ref=f3e328]:
+              - generic [ref=f3e329]: validate.py
+              - generic [ref=f3e330]: "Cohesion: 80%"
+            - generic [ref=f3e331]: "4"
+          - generic [ref=f3e332] [cursor=pointer]:
+            - generic [ref=f3e335]:
+              - generic [ref=f3e336]: NodeInspector.tsx
+              - generic [ref=f3e337]: "Cohesion: 80%"
+            - generic [ref=f3e338]: "4"
+          - generic [ref=f3e339] [cursor=pointer]:
+            - generic [ref=f3e342]:
+              - generic [ref=f3e343]: PathFinder.tsx
+              - generic [ref=f3e344]: "Cohesion: 80%"
+            - generic [ref=f3e345]: "4"
+          - generic [ref=f3e346] [cursor=pointer]:
+            - generic [ref=f3e349]:
+              - generic [ref=f3e350]: main.tsx
+              - generic [ref=f3e351]: "Cohesion: 80%"
+            - generic [ref=f3e352]: "4"
+          - generic [ref=f3e353] [cursor=pointer]:
+            - generic [ref=f3e356]:
+              - generic [ref=f3e357]: vite.config.ts
+              - generic [ref=f3e358]: "Cohesion: 80%"
+            - generic [ref=f3e359]: "4"
+          - generic [ref=f3e360] [cursor=pointer]:
+            - generic [ref=f3e363]:
+              - generic [ref=f3e364]: _walk
+              - generic [ref=f3e365]: "Cohesion: 80%"
+            - generic [ref=f3e366]: "4"
+          - generic [ref=f3e367] [cursor=pointer]:
+            - generic [ref=f3e370]:
+              - generic [ref=f3e371]: extract_datafile.add_key
+              - generic [ref=f3e372]: "Cohesion: 80%"
+            - generic [ref=f3e373]: "4"
+          - generic [ref=f3e374] [cursor=pointer]:
+            - generic [ref=f3e377]:
+              - generic [ref=f3e378]: nodemonk 🧠⚡
+              - generic [ref=f3e379]: "Cohesion: 80%"
+            - generic [ref=f3e380]: "3"
+          - generic [ref=f3e381] [cursor=pointer]:
+            - generic [ref=f3e384]:
+              - generic [ref=f3e385]: Or with custom output folder and extra exports
+              - generic [ref=f3e386]: "Cohesion: 80%"
+            - generic [ref=f3e387]: "3"
+          - generic [ref=f3e388] [cursor=pointer]:
+            - generic [ref=f3e391]:
+              - generic [ref=f3e392]: index-C9psCsTC.js
+              - generic [ref=f3e393]: "Cohesion: 80%"
+            - generic [ref=f3e394]: "3"
+          - generic [ref=f3e395] [cursor=pointer]:
+            - generic [ref=f3e398]:
+              - generic [ref=f3e399]: react.dev
+              - generic [ref=f3e400]: "Cohesion: 80%"
+            - generic [ref=f3e401]: "3"
+          - generic [ref=f3e402] [cursor=pointer]:
+            - generic [ref=f3e405]:
+              - generic [ref=f3e406]: extract.py
+              - generic [ref=f3e407]: "Cohesion: 80%"
+            - generic [ref=f3e408]: "3"
+          - generic [ref=f3e409] [cursor=pointer]:
+            - generic [ref=f3e412]:
+              - generic [ref=f3e413]: benchmark.py
+              - generic [ref=f3e414]: "Cohesion: 80%"
+            - generic [ref=f3e415]: "3"
+          - generic [ref=f3e416] [cursor=pointer]:
+            - generic [ref=f3e419]:
+              - generic [ref=f3e420]: external dependency
+              - generic [ref=f3e421]: "Cohesion: 80%"
+            - generic [ref=f3e422]: "3"
+          - generic [ref=f3e423] [cursor=pointer]:
+            - generic [ref=f3e426]:
+              - generic [ref=f3e427]: external dependency
+              - generic [ref=f3e428]: "Cohesion: 80%"
+            - generic [ref=f3e429]: "3"
+          - generic [ref=f3e430] [cursor=pointer]:
+            - generic [ref=f3e433]:
+              - generic [ref=f3e434]: QueryConsole.tsx
+              - generic [ref=f3e435]: "Cohesion: 80%"
+            - generic [ref=f3e436]: "3"
+          - generic [ref=f3e437] [cursor=pointer]:
+            - generic [ref=f3e440]:
+              - generic [ref=f3e441]: external dependency
+              - generic [ref=f3e442]: "Cohesion: 80%"
+            - generic [ref=f3e443]: "3"
+          - generic [ref=f3e444] [cursor=pointer]:
+            - generic [ref=f3e447]:
+              - generic [ref=f3e448]: tsconfig.json
+              - generic [ref=f3e449]: "Cohesion: 80%"
+            - generic [ref=f3e450]: "3"
+          - generic [ref=f3e451] [cursor=pointer]:
+            - generic [ref=f3e454]:
+              - generic [ref=f3e455]: _label
+              - generic [ref=f3e456]: "Cohesion: 80%"
+            - generic [ref=f3e457]: "3"
+          - generic [ref=f3e458] [cursor=pointer]:
+            - generic [ref=f3e461]:
+              - generic [ref=f3e462]: _louvain_partition
+              - generic [ref=f3e463]: "Cohesion: 80%"
+            - generic [ref=f3e464]: "3"
+          - generic [ref=f3e465] [cursor=pointer]:
+            - generic [ref=f3e468]:
+              - generic [ref=f3e469]: extract_python.DefVisitor
+              - generic [ref=f3e470]: "Cohesion: 80%"
+            - generic [ref=f3e471]: "3"
+          - generic [ref=f3e472] [cursor=pointer]:
+            - generic [ref=f3e475]:
+              - generic [ref=f3e476]: run_pipeline.say
+              - generic [ref=f3e477]: "Cohesion: 80%"
+            - generic [ref=f3e478]: "3"
+          - generic [ref=f3e479] [cursor=pointer]:
+            - generic [ref=f3e482]:
+              - generic [ref=f3e483]: path_between._chain
+              - generic [ref=f3e484]: "Cohesion: 80%"
+            - generic [ref=f3e485]: "3"
+          - generic [ref=f3e486] [cursor=pointer]:
+            - generic [ref=f3e489]:
+              - generic [ref=f3e490]: NodeMkHandler
+              - generic [ref=f3e491]: "Cohesion: 80%"
+            - generic [ref=f3e492]: "3"
+          - generic [ref=f3e493] [cursor=pointer]:
+            - generic [ref=f3e496]:
+              - generic [ref=f3e497]: test_explain_returns_neighbors
+              - generic [ref=f3e498]: "Cohesion: 80%"
+            - generic [ref=f3e499]: "3"
+          - generic [ref=f3e500] [cursor=pointer]:
+            - generic [ref=f3e503]:
+              - generic [ref=f3e504]: ⚡ Why nodemonk?
+              - generic [ref=f3e505]: "Cohesion: 80%"
+            - generic [ref=f3e506]: "2"
+          - generic [ref=f3e507] [cursor=pointer]:
+            - generic [ref=f3e510]:
+              - generic [ref=f3e511]: main
+              - generic [ref=f3e512]: "Cohesion: 80%"
+            - generic [ref=f3e513]: "2"
+          - generic [ref=f3e514] [cursor=pointer]:
+            - generic [ref=f3e517]:
+              - generic [ref=f3e518]: binaryasset.py
+              - generic [ref=f3e519]: "Cohesion: 80%"
+            - generic [ref=f3e520]: "2"
+          - generic [ref=f3e521] [cursor=pointer]:
+            - generic [ref=f3e524]:
+              - generic [ref=f3e525]: GodNodesPanel.tsx
+              - generic [ref=f3e526]: "Cohesion: 80%"
+            - generic [ref=f3e527]: "2"
+          - generic [ref=f3e528] [cursor=pointer]:
+            - generic [ref=f3e531]:
+              - generic [ref=f3e532]: find_cycles
+              - generic [ref=f3e533]: "Cohesion: 80%"
+            - generic [ref=f3e534]: "2"
+          - generic [ref=f3e535] [cursor=pointer]:
+            - generic [ref=f3e538]:
+              - generic [ref=f3e539]: cmd_path
+              - generic [ref=f3e540]: "Cohesion: 80%"
+            - generic [ref=f3e541]: "2"
+          - generic [ref=f3e542] [cursor=pointer]:
+            - generic [ref=f3e545]:
+              - generic [ref=f3e546]: build_parser.add_graph_args
+              - generic [ref=f3e547]: "Cohesion: 80%"
+            - generic [ref=f3e548]: "2"
+          - generic [ref=f3e549] [cursor=pointer]:
+            - generic [ref=f3e552]:
+              - generic [ref=f3e553]: louvain_nodes_to_comm
+              - generic [ref=f3e554]: "Cohesion: 80%"
+            - generic [ref=f3e555]: "2"
+          - generic [ref=f3e556] [cursor=pointer]:
+            - generic [ref=f3e559]:
+              - generic [ref=f3e560]: cluster
+              - generic [ref=f3e561]: "Cohesion: 80%"
+            - generic [ref=f3e562]: "2"
+          - generic [ref=f3e563] [cursor=pointer]:
+            - generic [ref=f3e566]:
+              - generic [ref=f3e567]: cohesion_score
+              - generic [ref=f3e568]: "Cohesion: 80%"
+            - generic [ref=f3e569]: "2"
+          - generic [ref=f3e570] [cursor=pointer]:
+            - generic [ref=f3e573]:
+              - generic [ref=f3e574]: _skip_dir
+              - generic [ref=f3e575]: "Cohesion: 80%"
+            - generic [ref=f3e576]: "2"
+          - generic [ref=f3e577] [cursor=pointer]:
+            - generic [ref=f3e580]:
+              - generic [ref=f3e581]: read_text_limited
+              - generic [ref=f3e582]: "Cohesion: 80%"
+            - generic [ref=f3e583]: "2"
+          - generic [ref=f3e584] [cursor=pointer]:
+            - generic [ref=f3e587]:
+              - generic [ref=f3e588]: extract_binary
+              - generic [ref=f3e589]: "Cohesion: 80%"
+            - generic [ref=f3e590]: "2"
+          - generic [ref=f3e591] [cursor=pointer]:
+            - generic [ref=f3e594]:
+              - generic [ref=f3e595]: extract_go
+              - generic [ref=f3e596]: "Cohesion: 80%"
+            - generic [ref=f3e597]: "2"
+          - generic [ref=f3e598] [cursor=pointer]:
+            - generic [ref=f3e601]:
+              - generic [ref=f3e602]: resolve_start_nodes
+              - generic [ref=f3e603]: "Cohesion: 80%"
+            - generic [ref=f3e604]: "2"
+          - generic [ref=f3e605] [cursor=pointer]:
+            - generic [ref=f3e608]:
+              - generic [ref=f3e609]: dfs_subgraph
+              - generic [ref=f3e610]: "Cohesion: 80%"
+            - generic [ref=f3e611]: "2"
+          - generic [ref=f3e612] [cursor=pointer]:
+            - generic [ref=f3e615]:
+              - generic [ref=f3e616]: explain_node
+              - generic [ref=f3e617]: "Cohesion: 80%"
+            - generic [ref=f3e618]: "2"
+          - generic [ref=f3e619] [cursor=pointer]:
+            - generic [ref=f3e622]:
+              - generic [ref=f3e623]: neighbor_filter
+              - generic [ref=f3e624]: "Cohesion: 80%"
+            - generic [ref=f3e625]: "2"
+          - generic [ref=f3e626] [cursor=pointer]:
+            - generic [ref=f3e629]:
+              - generic [ref=f3e630]: test_bfs_dfs_limitless
+              - generic [ref=f3e631]: "Cohesion: 80%"
+            - generic [ref=f3e632]: "2"
+          - generic [ref=f3e633] [cursor=pointer]:
+            - generic [ref=f3e636]:
+              - generic [ref=f3e637]: SecurityError
+              - generic [ref=f3e638]: "Cohesion: 80%"
+            - generic [ref=f3e639]: "2"
+          - generic [ref=f3e640] [cursor=pointer]:
+            - generic [ref=f3e643]:
+              - generic [ref=f3e644]: watch
+              - generic [ref=f3e645]: "Cohesion: 80%"
+            - generic [ref=f3e646]: "2"
+          - generic [ref=f3e647] [cursor=pointer]:
+            - generic [ref=f3e650]:
+              - generic [ref=f3e651]: __init__.py
+              - generic [ref=f3e652]: "Cohesion: 80%"
+            - generic [ref=f3e653]: "1"
+    - generic [ref=f3e655]:
+      - generic [ref=f3e657]:
+        - button "Islands" [ref=f3e658] [cursor=pointer]
+        - button "Architecture Flow" [ref=f3e664] [cursor=pointer]
+        - button "Organic" [ref=f3e670] [cursor=pointer]
+        - button "Cards View" [ref=f3e676] [cursor=pointer]
+      - generic [ref=f3e677]:
+        - button "Hide Directional Arrows" [ref=f3e678] [cursor=pointer]
+        - button "Show Edge Relation Labels" [ref=f3e681] [cursor=pointer]
+        - button "Zoom In" [ref=f3e685] [cursor=pointer]
+        - button "Zoom Out" [ref=f3e689] [cursor=pointer]
+        - button "Reset View" [ref=f3e693] [cursor=pointer]
+        - button "Freeze Layout" [ref=f3e697] [cursor=pointer]
+      - generic:
+        - generic:
+          - generic:
+            - text: "Nodes:"
+            - strong: "491"
+          - generic:
+            - text: "Edges:"
+            - strong: "1179"
+          - generic: Settling...
+        - generic:
+          - generic: Extracted
+          - generic: Inferred
+          - generic: Ambiguous

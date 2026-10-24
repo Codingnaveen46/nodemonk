@@ -544,13 +544,25 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     draw();
   }, [draw]);
 
-  // Wheel zoom
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
-    const newK = Math.max(0.04, Math.min(8, transform.k * zoomFactor));
-    setTransform(prev => ({ ...prev, k: newK }));
-  };
+  // Wheel zoom attached directly to canvas with { passive: false } to prevent passive listener warning
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+      setTransform(prev => ({
+        ...prev,
+        k: Math.max(0.04, Math.min(8, prev.k * zoomFactor))
+      }));
+    };
+
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      canvas.removeEventListener('wheel', onWheel);
+    };
+  }, []);
 
   // Screen to Graph coordinates
   const screenToGraph = (clientX: number, clientY: number) => {
@@ -653,7 +665,6 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#090d16' }}>
       <canvas
         ref={canvasRef}
-        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

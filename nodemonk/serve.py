@@ -97,6 +97,12 @@ class NodeMkHandler(BaseHTTPRequestHandler):  # noqa: N801
             self._send({"error": "graph not loaded"}, 500)
             return
 
+        if path == "/graph.html":
+            gh_file = Path("nodemonk-out/graph.html")
+            if gh_file.exists():
+                self._send(gh_file.read_bytes(), 200, content_type="text/html")
+                return
+
         # Serve static React UI if available
         if _WEB_DIST.exists():
             clean_path = path.lstrip("/")

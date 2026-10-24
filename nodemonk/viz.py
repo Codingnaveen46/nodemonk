@@ -531,13 +531,6 @@ function render() {
   status.textContent = `${N.length.toLocaleString()} nodes · ${L.length.toLocaleString()} edges · ${stateStr} · zoom ${scale.toFixed(2)}x`;
 }
 
-  ctx.restore();
-
-  // Status indicator
-  const stateStr = alpha < MIN_ALPHA ? "stable (frozen)" : `settling (${Math.round((1 - alpha) * 100)}%)`;
-  status.textContent = `${N.length.toLocaleString()} nodes · ${L.length.toLocaleString()} edges · ${stateStr} · zoom ${scale.toFixed(2)}x`;
-}
-
 let nbrSet = new Set(), hoverN = null, selN = null;
 
 function neighbors(i) {
