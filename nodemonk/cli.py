@@ -411,8 +411,14 @@ MARKER_END = "<!-- /nodemonk-skill -->"
 
 def cmd_install(args) -> None:  # noqa: ANN001
     """Register the /nodemonk skill with AI assistants (graphify-style)."""
-    from .install import install as inst
+    from .install import install as inst, no_install_howto, skill_markdown
 
+    if args.print_skill:
+        print(skill_markdown())
+        return
+    if args.howto:
+        print(no_install_howto(args.howto))
+        return
     platforms = args.platform if args.platform else ["agents", "zcode", "claude", "codex"]
     for platform in platforms:
         out = inst(platform, project=args.project)
@@ -619,9 +625,13 @@ def build_parser() -> argparse.ArgumentParser:
     sk.add_argument("action", choices=["install", "uninstall"])
 
     ins = sub.add_parser("install", help="register the /nodemonk skill with AI assistants (graphify-style)")
-    ins.add_argument("--platform", action="append", choices=["agents", "zcode", "claude", "codex"],
-                     help="repeatable; default: all four")
+    ins.add_argument("--platform", action="append", choices=["agents", "zcode", "claude", "codex",
+                     "antigravity", "opencode", "cursor", "gemini", "kilo", "skills"],
+                     help="repeatable; default: all four core locations (antigravity & friends alias to agents)")
     ins.add_argument("--project", action="store_true", help="install into the current repo instead of the user profile")
+    ins.add_argument("--print", dest="print_skill", action="store_true", help="print the SKILL.md to stdout and exit")
+    ins.add_argument("--howto", nargs="?", const="antigravity", metavar="ASSISTANT",
+                     help="print the no-install (fetch-from-GitHub) recipe for an assistant")
     ins.set_defaults(func=cmd_install)
 
     unins = sub.add_parser("uninstall", help="remove the /nodemonk skill registrations")

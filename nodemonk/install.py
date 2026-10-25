@@ -28,6 +28,12 @@ NAME = "nodemonk"
 
 PLATFORMS = ("agents", "zcode", "claude", "codex")
 
+# marketplace-style aliases: assistants that read the Agent-Skills location
+PLATFORM_ALIASES = {"antigravity": "agents", "skills": "agents", "opencode": "agents",
+                    "cursor": "agents", "gemini": "agents", "kilo": "agents"}
+
+SKILL_RAW_URL = "https://raw.githubusercontent.com/Codingnaveen46/nodemonk/main/skill/SKILL.md"
+
 
 def skill_markdown() -> str:
     from .hook import SKILL_MARKDOWN_MARKERS
@@ -151,8 +157,10 @@ def _targets(platform: str, project: bool) -> list[tuple[str, Path]]:
 
 
 def install(platform: str = "agents", *, project: bool = False) -> str:
+    platform = PLATFORM_ALIASES.get(platform, platform)
     if platform not in PLATFORMS:
-        return f"error: unknown platform '{platform}'. Choose from: {', '.join(PLATFORMS)}"
+        return (f"error: unknown platform '{platform}'. Choose from: {', '.join(PLATFORMS)}"
+                f" (aliases: {', '.join(sorted(PLATFORM_ALIASES))})")
     scope = "project" if project else "user"
     lines = [f"installing /{NAME} skill ({platform}, {scope} scope):"]
     for fname, path in _targets(platform, project):
@@ -161,8 +169,10 @@ def install(platform: str = "agents", *, project: bool = False) -> str:
 
 
 def uninstall(platform: str, *, project: bool = False) -> str:
+    platform = PLATFORM_ALIASES.get(platform, platform)
     if platform not in PLATFORMS:
-        return f"error: unknown platform '{platform}'. Choose from: {', '.join(PLATFORMS)}"
+        return (f"error: unknown platform '{platform}'. Choose from: {', '.join(PLATFORMS)}"
+                f" (aliases: {', '.join(sorted(PLATFORM_ALIASES))})")
     scope = "project" if project else "user"
     lines = [f"uninstalling /{NAME} skill ({platform}, {scope} scope):"]
     for _, path in _targets(platform, project):
@@ -195,3 +205,28 @@ def detect_platform() -> str:
     if env.get("ZCODE_ENTRYPOINT") or env.get("CLAUDE_CODE_ENTRYPOINT"):
         return "zcode/claude-code session detected"
     return "unknown"
+
+
+def no_install_howto(assistant: str = "antigravity") -> str:
+    """Marketplace-style install: fetch the skill from GitHub, no nodemonk needed.
+
+    The skill self-bootstraps the nodemonk CLI via uvx on first use, so the
+    assistant never needs a local pip install.
+    """
+    home = Path.home()
+    skill_dir = home / ".agents" / "skills" / NAME
+    return f"""no-install ({assistant}) — fetch the skill straight from GitHub:
+
+  mkdir -p {skill_dir}
+  curl -fsSL {SKILL_RAW_URL} -o {skill_dir}/SKILL.md
+
+Or just tell your assistant, in plain language:
+
+  "Install the nodemonk skill from {SKILL_RAW_URL} into your skills folder."
+
+Restart {assistant} once. From then on /nodemonk (or "use nodemonk to ...")
+works, and the skill fetches the nodemonk CLI itself via 'uvx --from
+git+https://github.com/Codingnaveen46/nodemonk' on first use — nothing to
+install locally. Works identically for any assistant that reads
+~/.agents/skills/ (Antigravity, OpenCode, Cursor, Gemini CLI, ...).
+"""

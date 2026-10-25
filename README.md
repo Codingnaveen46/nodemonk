@@ -131,6 +131,21 @@ docker run --rm -v "$(pwd):/workspace" nodemonk build /workspace
 
 `nodemonk install` still recommended for daily use — it registers the `/nodemonk` skill so agents bootstrap themselves when the binary is missing.
 
+### Plugin / marketplace-style install (Antigravity & friends, zero local install)
+
+Don't want to install anything? Every assistant that reads the Agent-Skills spec (Antigravity, OpenCode, Cursor, Gemini CLI, Kilo, ...) can fetch the skill straight from GitHub — one line, no Python, no clone:
+
+```bash
+mkdir -p ~/.agents/skills/nodemonk
+curl -fsSL https://raw.githubusercontent.com/Codingnaveen46/nodemonk/main/skill/SKILL.md -o ~/.agents/skills/nodemonk/SKILL.md
+```
+
+Or skip the terminal entirely — tell your assistant in plain language:
+
+> "Install the nodemonk skill from https://raw.githubusercontent.com/Codingnaveen46/nodemonk/main/skill/SKILL.md into your skills folder."
+
+Restart the assistant once. `/nodemonk` (or "use nodemonk to explain the auth flow") now works, and the skill **fetches the nodemonk CLI itself** via `uvx` on first use — the tooling downloads automatically when a graph is needed. The same committed skill file powers `nodemonk install`, so both paths stay identical (`nodemonk install --print > skill/SKILL.md` regenerates it; a test enforces the match).
+
 ---
 
 ### 3. Launch the Interactive React Web Application
