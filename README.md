@@ -2,26 +2,39 @@
 
 > **See everything. Ask anything.** Turn any codebase, documentation, or data corpus into a persistent, queryable knowledge graph with community detection, live graph analytics, and zero arbitrary limits.
 
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![License: Apache-2.0 OR MIT](https://img.shields.io/badge/License-Apache--2.0%20%7C%20MIT-blue.svg)](LICENSE)
 [![Python: >=3.10](https://img.shields.io/badge/Python->=3.10-green.svg)](https://python.org)
 [![React: 19](https://img.shields.io/badge/React-19.0-61dafb.svg)](https://react.dev)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero%20(Pure%20Python)-brightgreen.svg)]()
 
 ---
 
+## 📄 License
+
+This project is dual-licensed under the Apache License, Version 2.0, and the MIT License.
+
+You may use this project under either license, at your option.
+
+- Apache License 2.0: [LICENSE](LICENSE)
+- MIT License: [LICENSE-MIT](LICENSE-MIT)
+
+This gives users flexibility for both open-source and commercial use while keeping the project clear and trustworthy.
+
+---
+
 ## ⚡ Why nodemonk?
 
-`nodemonk` was built to provide a clean, unconstrained, local-first alternative to tools like `graphify`. While `graphify` demonstrated the power of turning code into knowledge graphs, it contains severe artificial constraints and heavy dependencies that restrict real-world production usage.
+`nodemonk` was built to provide a clean, unconstrained, local-first alternative to tools like `graphify`. While `graphify` demonstrated the power of turning code into knowledge graphs, it contains hard limits and brittle dependencies, whereas nodemonk is built for practical engineering work at scale.
 
 ### 📊 Concrete Comparison & Evidence
 
 | Feature / Limit | Graphify Labs (`graphify`) | **nodemonk** |
 | :--- | :--- | :--- |
-| **Node Visualization Limit** | **Hard cap at 5,000 nodes** (`MAX_NODES_FOR_VIZ = 5_000` in `graphify/exporters/html.py:14`; raises `ValueError` if exceeded) | **Unlimited Nodes** (Accelerated Canvas + LOD rendering handles 100k+ nodes smoothly) |
-| **Query Budget & Truncation** | **Capped at 1,500 tokens** (`--budget 1500`, subagents chunked and truncated) | **Unlimited Queries & Streaming** (`--limit 0` for full traversals, depthless BFS/DFS) |
-| **Dependencies** | NetworkX, tree-sitter C-bindings, numpy, scipy, graspologic (7-19s JIT import times, fragile compilation) | **Zero External Dependencies** (Pure standard library Python; instant installation anywhere) |
+| **Node Visualization Limit** | **Hard cap at 5,000 nodes** (`MAX_NODES_FOR_VIZ = 5_000` in `graphify/exporters/html.py:14`; raises `ValueError` if exceeded) | **Unlimited Nodes** (Accelerated custom graph engine with no arbitrary visualization cap) |
+| **Query Budget & Truncation** | **Capped at 1,500 tokens** (`--budget 1500`, subagents chunked and truncated) | **Unlimited Queries & Streaming** (`--limit 0` for full traversals, depthless BFS/DFS, and live graph analysis) |
+| **Dependencies** | NetworkX, tree-sitter C-bindings, numpy, scipy, graspologic (7-19s JIT import times, fragile compilation) | **Zero External Dependencies** (Pure standard library Python; instant startup) |
 | **Call Graph Parked Calls** | **Capped at 64 calls/node** (`_MAX_PARKED_CALLS_PER_NODE = 64` in `extract.py:4515`) | **No Cap** (Full fidelity call and reference capture) |
-| **Config & Data File Caps** | Capped: YAML at 1MB/500 pairs, JSON at 1MB, XML at 2MB (`extractors/yaml_config.py:24`) | **Full File Parsing** (Processes enterprise schemas and large monorepos without drops) |
+| **Config & Data File Caps** | Capped: YAML at 1MB/500 pairs, JSON at 1MB, XML at 2MB (`extractors/yaml_config.py:24`) | **Full File Parsing** (Processes enterprise schemas and large monorepos without artificial limits) |
 | **Modern React Interface** | Basic single HTML file | **Full React 19 + TypeScript + Vite interactive explorer** built-in |
 | **MCP Agent Protocol** | Supported | Supported via `nodemonk mcp` (stdio JSON-RPC compatible with Claude, Cursor, Antigravity, Devin) |
 | **Export Ecosystem** | JSON, HTML | JSON, HTML, SVG, DOT, GraphML, Cypher (Neo4j), and Obsidian Vault Markdown with bidirectional `[[wikilinks]]` |
@@ -65,7 +78,7 @@ python3 -m nodemonk merge-graphs a/out/graph.json b/out/graph.json -o merged.jso
 
 ### 2. Install into Your Coding Agent (one command, works like graphify)
 
-`nodemonk install` registers the `/nodemonk` skill with your AI assistant, so typing `/nodemonk .` builds a graph and `/nodemonk query "..."` answers questions through it — no per-assistant manual setup:
+`nodemonk install` registers the `/nodemonk` skill with your AI assistant, so typing `/nodemonk .` builds a graph and `/nodemonk query "..."` answers questions through it — no per-assistant manual setup required.
 
 ```bash
 nodemonk install                 # installs everywhere applicable (see platform list)
@@ -83,7 +96,7 @@ Supported platforms:
 | **Claude Code** | `~/.claude/skills/nodemonk/SKILL.md` (+ Agent-Skills global) | `/nodemonk` |
 | **Codex** | `~/.codex/prompts/nodemonk.md` (+ Agent-Skills global) | `$nodemonk` |
 | **GitHub Copilot CLI / VS Code Copilot Chat** | Agent-Skills global + `--project` (`.github/copilot-instructions.md` via AGENTS.md) | ask for nodemonk |
-| **OpenCode, Antigravity, Gemini CLI, Cursor, Kilo, Aider, Pi, Devin** | cross-framework Agent-Skills location `~/.agents/skills/nodemonk/SKILL.md` (read by every spec-compliant framework) | `/nodemonk` or natural language |
+| **OpenCode, Antigravity, Gemini CLI, Cursor, Kilo, Aider, Pi, Devin** | cross-framework Agent-Skills location `~/.agents/skills/nodemonk/SKILL.md` (read by every spec-compliant framework) | `/nodemonk` |
 | **Anything with MCP** | `nodemonk mcp` (stdio server, see §4 below) | tools, no slash command |
 
 Once installed, examples your assistant understands:
