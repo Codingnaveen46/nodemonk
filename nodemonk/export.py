@@ -301,7 +301,8 @@ def to_obsidian(
     for cid in sorted(communities):
         members = communities[cid]
         label = labels.get(cid, f"Community {cid}")
-        file_name = f"community-{cid:04d}-{re.sub(r'[^\\w-]+', '-', label.strip().lower().replace(' ', '-'))[:40] or 'unknown'}.md"
+        slug = re.sub(r"[^\w-]+", "-", label.strip().lower().replace(" ", "-"))[:40] or "unknown"
+        file_name = f"community-{cid:04d}-{slug}.md"
         rel_nodes = sorted(members, key=lambda n: -G.degree(n))
         member_lines = []
         for nid in rel_nodes[:400]:
