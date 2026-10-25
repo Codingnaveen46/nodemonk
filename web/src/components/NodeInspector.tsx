@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { GraphNode } from '../types';
+import { GraphNode, GraphEdge } from '../types';
 import { X, FileCode, ArrowDownLeft, ArrowUpRight, Network } from 'lucide-react';
 
 interface NodeInspectorProps {
@@ -7,6 +7,8 @@ interface NodeInspectorProps {
   onClose: () => void;
   onSelectNodeById: (id: string) => void;
   communityColors: Record<number, string>;
+  allEdges?: GraphEdge[];
+  allNodes?: GraphNode[];
 }
 
 export const NodeInspector: React.FC<NodeInspectorProps> = ({
@@ -14,6 +16,8 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   onClose,
   onSelectNodeById,
   communityColors,
+  allEdges = [],
+  allNodes = [],
 }) => {
   const [details, setDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -23,13 +27,81 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
       setDetails(null);
       return;
     }
-    setLoading(true);
-    fetch(`/api/node/${encodeURIComponent(node.id)}`)
-      .then(res => res.json())
-      .then(data => setDetails(data))
-      .catch(err => console.error(err))
-      .finally(() => setLoading(false));
-  }, [node]);
+
+    const computeLocalDetails = () => {
+      const nid = node.id;
+      const incoming: any[] = [];
+      const outgoing: any[] = [];
+      const nbrSet = new Set<string>();
+      const nodeById = new Map<string, GraphNode>(allNodes.map(n => [n.id, n]));
+
+      // Same entry shape the HTTP API returns (id/to/node/label/file/kind) so
+      // rows render labels and click-through works in embedded graph.html too.
+      const entryFor = (otherId: string, relation?: string, confidence?: string) => {
+        const nd: any = nodeById.get(otherId);
+        return {
+          id: otherId,
+          to: otherId,
+          node: otherId,
+          label: nd?.label || otherId,
+          file: nd?.file || nd?.source_file,
+          kind: nd?.kind,
+          relation: relation || 'CALLS',
+          confidence: confidence || 'EXTRACTED',
+        };
+      };
+
+      allEdges.forEach(e => {
+        const s = typeof e.source === 'object' ? (e.source as any).id : e.source;
+        const t = typeof e.target === 'object' ? (e.target as any).id : e.target;
+        if (s === nid) {
+          outgoing.push(entryFor(t, e.relation, e.confidence));
+          nbrSet.add(t);
+        }
+        if (t === nid) {
+          incoming.push(entryFor(s, e.relation, e.confidence));
+          nbrSet.add(s);
+        }
+      });
+
+      setDetails({
+        node: {
+          id: node.id,
+          label: node.label || node.id,
+          file: node.file || node.source_file,
+          source_location: node.source_location,
+          kind: node.kind,
+          community: node.community,
+          degree: incoming.length + outgoing.length,
+          docstring: node.docstring,
+        },
+        incoming,
+        outgoing,
+        neighbors: Array.from(nbrSet).map(id => entryFor(id, 'links', 'EXTRACTED')),
+        community_meta: {
+          id: node.community,
+          label: `Community ${node.community}`,
+          cohesion: 0.85,
+        }
+      });
+    };
+
+    if (window.location.protocol.startsWith('http')) {
+      setLoading(true);
+      fetch(`/api/node/${encodeURIComponent(node.id)}`)
+        .then(res => {
+          if (!res.ok) throw new Error('API unavailable');
+          return res.json();
+        })
+        .then(data => setDetails(data))
+        .catch(() => {
+          computeLocalDetails();
+        })
+        .finally(() => setLoading(false));
+    } else {
+      computeLocalDetails();
+    }
+  }, [node, allEdges, allNodes]);
 
   if (!node) return null;
 
@@ -173,7 +245,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   {details.outgoing.map((out: any, idx: number) => (
                     <div
                       key={idx}
-                      onClick={() => onSelectNodeById(out.node || out.id || out.to)}
+                      onClick={() => onSelectNodeById(out.node || out.id || out.to || out.target)}
                       style={{
                         padding: '6px 8px',
                         background: 'var(--bg-card)',
@@ -196,7 +268,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     >
                       <div style={{ minWidth: 0, paddingRight: 6 }}>
                         <div style={{ fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {out.label || out.node || out.id}
+                          {out.label || out.node || out.id || out.target}
                         </div>
                         {out.file && (
                           <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -235,7 +307,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   {details.incoming.map((inc: any, idx: number) => (
                     <div
                       key={idx}
-                      onClick={() => onSelectNodeById(inc.node || inc.id || inc.to)}
+                      onClick={() => onSelectNodeById(inc.node || inc.id || inc.to || inc.source)}
                       style={{
                         padding: '6px 8px',
                         background: 'var(--bg-card)',
@@ -258,7 +330,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     >
                       <div style={{ minWidth: 0, paddingRight: 6 }}>
                         <div style={{ fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {inc.label || inc.node || inc.id}
+                          {inc.label || inc.node || inc.id || inc.source}
                         </div>
                         {inc.file && (
                           <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

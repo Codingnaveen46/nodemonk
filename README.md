@@ -43,14 +43,68 @@ python3 -m nodemonk build . --out-dir ./nodemonk-out --cypher --obsidian --svg
 
 Output generated in `nodemonk-out/`:
 - `graph.json`: The complete node-link knowledge graph with explicit confidence metadata.
-- `graph.html`: Standalone offline browser visualization.
+- `graph.html`: Standalone offline browser visualization (Obsidian-style dot view — works up to any node count).
 - `GRAPH_REPORT.md`: Comprehensive architecture audit, community breakdown, God nodes, and suggested questions.
+- `wiki/`: (Optional, `--wiki`) Markdown wiki — `index.md` + one article per community.
+- `callflow.html`: (Optional, `--callflow`) Mermaid community call-flow diagram.
 - `obsidian/`: (Optional) Obsidian vault notes with inter-community wikilinks.
 - `cypher.txt`: (Optional) Ready-to-import Cypher statements for Neo4j.
 
+Useful build flags:
+
+```bash
+python3 -m nodemonk build . --update          # incremental: only changed files re-extract
+python3 -m nodemonk build . --cluster-only    # re-cluster the existing graph
+python3 -m nodemonk build . --resolution 1.5  # more, smaller communities
+python3 -m nodemonk build . --exclude-hubs 3  # hide the 3 biggest super-hubs from god-node rankings
+python3 -m nodemonk build . --no-viz          # skip the HTML, just report + JSON
+python3 -m nodemonk merge-graphs a/out/graph.json b/out/graph.json -o merged.json   # cross-repo graphs
+```
+
 ---
 
-### 2. Launch the Interactive React Web Application
+### 2. Install into Your Coding Agent (one command, works like graphify)
+
+`nodemonk install` registers the `/nodemonk` skill with your AI assistant, so typing `/nodemonk .` builds a graph and `/nodemonk query "..."` answers questions through it — no per-assistant manual setup:
+
+```bash
+nodemonk install                 # installs everywhere applicable (see platform list)
+nodemonk install --project       # scope to the current repo instead of your user profile
+nodemonk install-status          # show what is installed where
+nodemonk uninstall               # remove all registrations
+nodemonk install --platform zcode --project    # one platform only
+```
+
+Supported platforms:
+
+| Assistant | What `nodemonk install` writes | Invocation |
+|---|---|---|
+| **ZCode** | `~/.zcode/commands/nodemonk.md` (+ Agent-Skills global) | `/nodemonk` |
+| **Claude Code** | `~/.claude/skills/nodemonk/SKILL.md` (+ Agent-Skills global) | `/nodemonk` |
+| **Codex** | `~/.codex/prompts/nodemonk.md` (+ Agent-Skills global) | `$nodemonk` |
+| **GitHub Copilot CLI / VS Code Copilot Chat** | Agent-Skills global + `--project` (`.github/copilot-instructions.md` via AGENTS.md) | ask for nodemonk |
+| **OpenCode, Antigravity, Gemini CLI, Cursor, Kilo, Aider, Pi, Devin** | cross-framework Agent-Skills location `~/.agents/skills/nodemonk/SKILL.md` (read by every spec-compliant framework) | `/nodemonk` or natural language |
+| **Anything with MCP** | `nodemonk mcp` (stdio server, see §4 below) | tools, no slash command |
+
+Once installed, examples your assistant understands:
+
+```
+/nodemonk .                                   # build the graph for the current folder
+/nodemonk . --wiki                            # also generate the markdown wiki
+/nodemonk query "what connects auth to the database?"
+/nodemonk path "UserService" "DatabasePool"
+/nodemonk explain "RateLimiter"
+```
+
+**Keep the graph fresh automatically** — the git hook rebuilds (incrementally, zero tokens) after every commit:
+
+```bash
+nodemonk hook install        # post-commit hook; uninstall/status supported
+```
+
+---
+
+### 3. Launch the Interactive React Web Application
 `nodemonk` includes a modern React 19 web interface:
 
 ```bash
@@ -74,7 +128,7 @@ npm run dev
 
 ---
 
-### 3. Query from the Terminal
+### 4. Query from the Terminal
 `nodemonk` CLI provides unlimited querying capabilities:
 
 ```bash
@@ -85,7 +139,7 @@ python3 -m nodemonk query "how does the pipeline execute"
 python3 -m nodemonk path pipeline.py Graph
 
 # List God nodes / architectural hubs
-python3 -m nodemonk gods --limit 10
+python3 -m nodemonk top --by pagerank --limit 10
 
 # Detect circular dependency loops
 python3 -m nodemonk cycles
@@ -99,7 +153,7 @@ python3 -m nodemonk stats
 
 ---
 
-### 4. Agent Integration (MCP Server)
+### 5. Agent Integration (MCP Server)
 `nodemonk` speaks Model Context Protocol (MCP) over stdio. Connect it to Cursor, Claude Code, Devin, or Antigravity:
 
 Add to your MCP configuration:
@@ -155,6 +209,12 @@ Run the test suite with pytest:
 ```bash
 python3 -m pytest
 ```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome — new language extractors, visualization improvements, agent integrations, docs. See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, architecture map, and PR guidelines.
 
 ---
 

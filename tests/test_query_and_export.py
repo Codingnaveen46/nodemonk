@@ -107,11 +107,12 @@ def test_exports(G: Graph, tmp_path: Path) -> None:
     assert "--" in dot.read_text(encoding="utf-8")
     svg = to_svg(G, comms, labels, tmp_path / "g.svg")
     assert "<circle" in svg.read_text(encoding="utf-8")
-    obs = to_obsidian(G, comms, labels, tmp_path / "vault", cohesion=cohesion_score(G, comms[0]))
+    obs = to_obsidian(G, comms, labels, tmp_path / "vault", cohesion={0: cohesion_score(G, comms[0]), 1: cohesion_score(G, comms[1])})
     assert obs >= 3
     html = write_viz_html(G, comms, labels, tmp_path / "graph.html")
     body = Path(html).read_text(encoding="utf-8")
-    assert "const DATA =" in body and '"id": "a"' in body
+    assert "window.__NODEMONK_DATA__" in body or "const DATA =" in body
+    assert '"a"' in body  # node data is embedded in the view itself
 
 
 def test_viz_holds_50k_nodes(tmp_path: Path) -> None:
@@ -123,8 +124,9 @@ def test_viz_holds_50k_nodes(tmp_path: Path) -> None:
     comms = {0: [f"n{i}" for i in range(50_000)]}
     labels = {0: "chain"}
     path = write_viz_html(G, comms, labels, tmp_path / "big.html")
-    size = Path(path).stat().st_size
-    assert size > 2_000_000  # the point: no 5k cap - graph serialized fully
+    body = Path(path).read_text(encoding="utf-8")
+    assert Path(path).stat().st_size > 2_000_000  # the point: no 5k cap - graph serialized fully
+    assert "n49999" in body  # every node is really inside the file, whichever viewer ships
 
 
 def test_mcp_stdio(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

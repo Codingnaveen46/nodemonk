@@ -72,6 +72,9 @@ def cmd_build(args) -> None:  # noqa: ANN001
         cypher=args.cypher,
         dot=args.dot,
         obsidian=args.obsidian,
+        wiki=args.wiki,
+        callflow=args.callflow,
+        exclude_hubs=args.exclude_hubs,
     )
     if "error" in summary:
         print(summary["error"], file=sys.stderr)
@@ -405,6 +408,71 @@ MARKER = "<!-- nodemonk-skill -->"
 MARKER_END = "<!-- /nodemonk-skill -->"
 
 
+def cmd_install(args) -> None:  # noqa: ANN001
+    """Register the /nodemonk skill with AI assistants (graphify-style)."""
+    from .install import install as inst
+
+    platforms = args.platform if args.platform else ["agents", "zcode", "claude", "codex"]
+    for platform in platforms:
+        out = inst(platform, project=args.project)
+        print(out)
+
+
+def cmd_uninstall(args) -> None:  # noqa: ANN001
+    from .install import uninstall as uninst
+
+    platforms = args.platform if args.platform else ["agents", "zcode", "claude", "codex"]
+    for platform in platforms:
+        print(uninst(platform, project=args.project))
+
+
+def cmd_install_status(_args) -> None:  # noqa: ANN001
+    from .install import status
+
+    print(status())
+
+
+def cmd_merge_graphs(args) -> None:  # noqa: ANN001
+    """Merge two or more graph.json files into one cross-repo graph."""
+    from .fsutil import atomic_write
+    from .export import to_json
+
+    merged = Graph(directed=False)
+    sources: list[Path] = [Path(p) for p in args.graphs]
+    for gp in sources:
+        if not gp.exists():
+            raise SystemExit(f"ERROR: no graph at {gp}")
+        G_part, data = load_graph_file(gp)
+        comms = {int(k): v for k, v in (data.get("communities") or {}).items()}
+        offset = 0
+        existing_comms = set()
+        # node/edge merge with keep_existing; prefix on collision is avoided -
+        # identical ids across repos are treated as the same concept
+        for nid, nd in G_part.nodes_data():
+            merged.add_node(nid, **nd)
+        for u, v in G_part.edges_view():
+            merged.add_edge(u, v, keep_existing=True, **(G_part.get_edge_data(u, v, {}) or {}))
+        for cid, members in comms.items():
+            existing_comms.add(cid)
+        offset = (max(existing_comms) + 1) if existing_comms else 0
+
+    # re-cluster the merged graph for coherent communities
+    from .cluster import cluster, label_communities_by_hub, score_all, modularity
+
+    communities, cmeta = cluster(merged)
+    cohesion = score_all(merged, communities)
+    labels = label_communities_by_hub(merged, communities)
+    mod = modularity(merged, {n: c for c, ms in communities.items() for n in ms})
+    out = Path(args.output) if args.output else sources[0].parent / "graph-merged.json"
+    to_json(merged, communities, labels, out, meta={
+        "merged_from": [str(p) for p in sources],
+        "analysis": {"modularity": mod, "method": cmeta.get("method")},
+    })
+    print(f"merged {len(sources)} graphs -> {out}")
+    print(f"  {merged.number_of_nodes():,} nodes · {merged.number_of_edges():,} edges · "
+          f"{len(communities)} communities (modularity {mod:.3f}, method {cmeta.get('method')})")
+
+
 def cmd_bench(args) -> None:  # noqa: ANN001
     from .benchmark import run_benchmark, print_benchmark
 
@@ -447,6 +515,10 @@ def build_parser() -> argparse.ArgumentParser:
     build_sp.add_argument("--cypher", action="store_true", help="also emit cypher.txt for Neo4j")
     build_sp.add_argument("--dot", action="store_true")
     build_sp.add_argument("--obsidian", action="store_true", help="Obsidian vault (one note per community)")
+    build_sp.add_argument("--wiki", action="store_true", help="markdown wiki (index.md + one article per community)")
+    build_sp.add_argument("--callflow", action="store_true", help="Mermaid community call-flow HTML")
+    build_sp.add_argument("--exclude-hubs", type=int, default=0, metavar="N",
+                          help="suppress the N most-connected super-hubs from god-node rankings")
     build_sp.add_argument("--quiet", action="store_true")
     build_sp.set_defaults(func=cmd_build)
 
@@ -544,6 +616,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     sk = sub.add_parser("skill", help="write nodemonk instructions into AGENTS.md/CLAUDE.md")
     sk.add_argument("action", choices=["install", "uninstall"])
+
+    ins = sub.add_parser("install", help="register the /nodemonk skill with AI assistants (graphify-style)")
+    ins.add_argument("--platform", action="append", choices=["agents", "zcode", "claude", "codex"],
+                     help="repeatable; default: all four")
+    ins.add_argument("--project", action="store_true", help="install into the current repo instead of the user profile")
+    ins.set_defaults(func=cmd_install)
+
+    unins = sub.add_parser("uninstall", help="remove the /nodemonk skill registrations")
+    unins.add_argument("--platform", action="append", choices=["agents", "zcode", "claude", "codex"])
+    unins.add_argument("--project", action="store_true")
+    unins.set_defaults(func=cmd_uninstall)
+
+    instat = sub.add_parser("install-status", help="show where /nodemonk skills are installed")
+    instat.set_defaults(func=cmd_install_status)
+
+    mg = sub.add_parser("merge-graphs", help="merge 2+ graph.json files and re-cluster (cross-repo graphs)")
+    mg.add_argument("graphs", nargs="+", help="graph.json paths to merge")
+    mg.add_argument("-o", "--output", default=None, help="output path (default: <first graph dir>/graph-merged.json)")
+    mg.set_defaults(func=cmd_merge_graphs)
     sk.add_argument("root", nargs="?", default=".")
     sk.set_defaults(func=cmd_skill)
 

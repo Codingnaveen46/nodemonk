@@ -23,6 +23,8 @@ from .query import global_stats
 from .report import generate as generate_report
 from .export import to_cypher, to_dot, to_graphml, to_json, to_obsidian, to_svg, load_graph_file
 from .viz import write_viz_html
+from .wiki import to_wiki
+from .callflow import to_callflow_html
 
 COST_FILE = "cost-history.json"
 
@@ -44,6 +46,9 @@ def run_pipeline(
     cypher: bool = False,
     dot: bool = False,
     obsidian: bool = False,
+    wiki: bool = False,
+    callflow: bool = False,
+    exclude_hubs: int = 0,
 ) -> dict[str, Any]:
     root = Path(root).resolve()
     if not root.exists():
@@ -143,6 +148,14 @@ def run_pipeline(
     mod = modularity(G, {n: c for c, ms in communities.items() for n in ms})
     gods = god_nodes(G, top_n=0)
     pr_ranks = god_nodes(G, top_n=0, by="pagerank")
+    if exclude_hubs > 0:
+        # suppress the N most-connected "utility super-hubs" from god-node
+        # rankings so subsystem-level structure is visible (graphify parity)
+        by_deg = sorted(G.degree_map().items(), key=lambda kv: -kv[1])[:exclude_hubs]
+        suppressed = {nid for nid, _ in by_deg}
+        gods = [g for g in gods if g["id"] not in suppressed]
+        pr_ranks = [g for g in pr_ranks if g["id"] not in suppressed]
+        say(f"god-node rankings: suppressed {len(suppressed)} super-hub(s) (--exclude-hubs {exclude_hubs})")
     surprises = surprising_connections(G, communities, top_n=0)
     questions = suggest_questions(G, communities, labels)
     cycles = find_cycles(G, limit=200)
@@ -160,7 +173,7 @@ def run_pipeline(
         "analysis": {
             "modularity": mod,
             "method": cmeta.get("method"),
-            "cohisions": cohesion,
+            "cohesion": cohesion,
             "cycles": len(cycles),
             "bridges": len(bridges),
             "articulation": len(articulation),
@@ -175,7 +188,7 @@ def run_pipeline(
     }
     payload = to_json(G, communities, labels, out_dir / "graph.json", meta=meta)
     say("wrote graph.json")
-    write_viz_html(G, communities, labels, out_dir / "graph.html", top_pagerank=_pr_map(pr_ranks))
+    write_viz_html(G, communities, labels, out_dir / "graph.html", top_pagerank=_pr_map(pr_ranks), cohesion=cohesion)
     say("wrote graph.html (open in any browser - works up to any node count)")
     if svg:
         to_svg(G, communities, labels, out_dir / "graph.svg")
@@ -192,6 +205,12 @@ def run_pipeline(
     if obsidian:
         n = to_obsidian(G, communities, labels, out_dir / "obsidian", cohesion=cohesion)
         say(f"obsidian vault: {n} community notes in {out_dir}/obsidian/")
+    if wiki:
+        wdir = to_wiki(G, communities, labels, out_dir / "wiki", cohesion=cohesion)
+        say(f"wiki: {wdir}/index.md + one article per community")
+    if callflow:
+        to_callflow_html(G, communities, labels, out_dir / "callflow.html")
+        say("wrote callflow.html (Mermaid community call flow)")
 
     tokens = {"input": extraction.get("input_tokens", 0), "output": extraction.get("output_tokens", 0)}
     report = generate_report(

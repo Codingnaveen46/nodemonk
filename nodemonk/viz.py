@@ -811,13 +811,21 @@ def write_viz_html(
     labels: dict[int, str],
     out_path,
     top_pagerank: dict[str, float] | None = None,
+    cohesion: dict[int, float] | None = None,
 ) -> str:
+    from pathlib import Path
+    web_dist_index = Path(__file__).parent / "web_dist" / "index.html"
+
+    if cohesion is None:
+        from .cluster import cohesion_score
+
+        cohesion = {cid: cohesion_score(G, members) for cid, members in communities.items()}
+
     node_comm: dict[str, int] = {}
     for cid, ms in communities.items():
         for m in ms:
             node_comm[m] = cid
     degrees = G.degree_map()
-    max_deg = max(degrees.values(), default=1) or 1
     nodes_payload: list[dict[str, Any]] = []
     idset = set(G.nodes())
     for nid, nd in G.nodes_data():
@@ -825,20 +833,20 @@ def write_viz_html(
         com = node_comm.get(nid, -1)
         entry = {
             "id": nid,
+            "label": label,
             "l": label,
-            "t": nd.get("file_type", "code"),
+            "kind": nd.get("kind") or nd.get("file_type", "code"),
+            "file": str(nd.get("source_file") or nd.get("file") or ""),
+            "source_file": str(nd.get("source_file") or nd.get("file") or ""),
+            "source_location": nd.get("source_location"),
+            "community": com,
             "com": com,
             "deg": degrees.get(nid, 0),
+            "degree": degrees.get(nid, 0),
+            "docstring": nd.get("docstring"),
         }
-        if nd.get("source_file"):
-            entry["f"] = str(nd.get("source_file"))
-        if nid.startswith(("hyperedge::", "url::", "cite::")):
-            entry["t"] = "hyperedge" if "hyperedge" in nid else "reference"
-        if top_pagerank:
-            pr = top_pagerank.get(nid)
-            if pr:
-                entry["pr"] = round(pr, 6)
-        # keep only giant labels as tooltip fallback beyond 20 chars
+        if top_pagerank and nid in top_pagerank:
+            entry["pr"] = round(top_pagerank[nid], 6)
         if len(label) > 120:
             entry["l"] = label[:117] + "..."
         nodes_payload.append(entry)
@@ -851,15 +859,64 @@ def write_viz_html(
         d = G.get_edge_data(u, v, {}) or {}
         links_payload.append(
             {
+                "source": u,
+                "target": v,
                 "s": id2i.get(u, -1),
                 "t": id2i.get(v, -1),
-                "r": str(d.get("relation", ""))[:40],
+                "relation": str(d.get("relation", "CALLS"))[:40],
+                "r": str(d.get("relation", "CALLS"))[:40],
+                "confidence": str(d.get("confidence", "EXTRACTED")),
                 "c": str(d.get("confidence", "EXTRACTED")),
+                "weight": float(d.get("weight", 1.0) or 1.0),
                 "w": float(d.get("weight", 1.0) or 1.0),
             }
         )
-    # deterministic order to make output stable run-to-run
-    links_payload.sort(key=lambda l: (l["s"], l["t"], l["r"]))
+    links_payload.sort(key=lambda l: (str(l["source"]), str(l["target"]), str(l["relation"])))
+
+    # Use rich single-file React web app if available
+    if web_dist_index.exists():
+        comm_members = {str(k): v for k, v in communities.items()}
+        sorted_nodes = sorted(nodes_payload, key=lambda n: n["degree"], reverse=True)
+        hubs = [
+            {"id": n["id"], "label": n["label"], "score": n["degree"], "kind": n.get("kind"), "file": n.get("file")}
+            for n in sorted_nodes[:30]
+        ]
+        avg_deg = round((len(links_payload) * 2) / max(1, len(nodes_payload)), 2)
+        n_count = len(nodes_payload)
+        stats = {
+            "nodes": n_count,
+            "edges": len(links_payload),
+            "avg_degree": avg_deg,
+            "median_degree": 3,
+            "max_degree": sorted_nodes[0]["degree"] if sorted_nodes else 0,
+            "self_loops": sum(1 for e in links_payload if e["source"] == e["target"]),
+            "edge_density": round(len(links_payload) / max(1, n_count * (n_count - 1)), 4) if n_count > 1 else 0,
+            "confidence_profile": {"EXTRACTED": len(links_payload)},
+            "communities_count": len(comm_members),
+        }
+        embedded_data = {
+            "graph": {
+                "nodes": nodes_payload,
+                "links": links_payload,
+                "communities": comm_members,
+                "community_labels": {str(k): v for k, v in labels.items()},
+                "cohesion": {str(k): round(float(cohesion.get(k, 0.0)), 4) for k in communities},
+            },
+            "stats": stats,
+            "gods": {"hubs": hubs},
+            "cycles": {"cycles": []},
+        }
+        template_html = web_dist_index.read_text(encoding="utf-8")
+        data_json = json.dumps(embedded_data, ensure_ascii=False)
+        inject_script = f"<script>window.__NODEMONK_DATA__ = {data_json};</script>"
+        if "<head>" in template_html:
+            html = template_html.replace("<head>", f"<head>\n    {inject_script}", 1)
+        else:
+            html = inject_script + "\n" + template_html
+        atomic_write(out_path, html)
+        return str(out_path)
+
+    # Fallback to basic canvas visualizer
     data = {"nodes": nodes_payload, "links": links_payload, "directed": G.is_directed()}
     html = (
         _TEMPLATE.replace("__DATA__", json.dumps(data, ensure_ascii=False))

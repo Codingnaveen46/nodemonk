@@ -23,9 +23,14 @@ interface GraphCanvasProps {
   highlightedCommunity: number | null;
   activePath: string[] | null;
   communityColors: Record<number, string>;
+  searchQuery?: string | null;
+  matchedIds?: Set<string> | null;
+  focusId?: string | null;
+  onFocusHandled?: () => void;
 }
 
 type LayoutMode = 'architecture' | 'islands' | 'force';
+type NodeViewMode = 'obsidian' | 'cards';
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   nodes,
@@ -35,12 +40,44 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   highlightedCommunity,
   activePath,
   communityColors,
+  searchQuery = null,
+  matchedIds = null,
+  focusId = null,
+  onFocusHandled,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const simulationRef = useRef<d3.Simulation<GraphNode, d3.SimulationLinkDatum<GraphNode>> | null>(null);
 
-  // View & Layout State
-  const [transform, setTransform] = useState({ x: 0, y: 0, k: 0.85 });
+  // View & Layout State — camera lives in a ref (no React render on zoom/pan)
+  const transformRef = useRef({ x: 0, y: 0, k: 0.85 });
+  const drawRef = useRef<() => void>(() => {});
+  const rafRef = useRef(0);
+  const scheduleDraw = useCallback(() => {
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      drawRef.current();
+    });
+  }, []);
+  const metaCacheRef = useRef<Map<string, { glyph: string; badge: string; color: string }>>(new Map());
+  const labelWidthCacheRef = useRef<Map<string, number>>(new Map());
+  const gridRef = useRef<{ cell: number; map: Map<string, GraphNode[]>; builtAt: number }>({ cell: 64, map: new Map(), builtAt: 0 });
+  const hoverRafRef = useRef(0);
+  const lastHoverIdRef = useRef<string | null>(null);
+  const downPosRef = useRef({ x: 0, y: 0 });
+  const dragMovedRef = useRef(false);
+  const pinnedRef = useRef<GraphNode | null>(null);
+
+  // Release the previously pinned node when selection moves elsewhere
+  useEffect(() => {
+    const prev = pinnedRef.current;
+    if (prev && prev.id !== selectedNode?.id && prev !== draggedNode) {
+      prev.fx = null;
+      prev.fy = null;
+      pinnedRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNode]);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('islands');
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   const [draggedNode, setDraggedNode] = useState<GraphNode | null>(null);
@@ -49,7 +86,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [simRunning, setSimRunning] = useState(true);
   const [showArrows, setShowArrows] = useState(true);
   const [showEdgeLabels, setShowEdgeLabels] = useState(false);
-  const [nodeViewMode, setNodeViewMode] = useState<'cards' | 'dots'>('cards');
+  const [nodeViewMode, setNodeViewMode] = useState<NodeViewMode>('obsidian');
 
   // Lookups & Cache
   const nodeMapRef = useRef<Map<string, GraphNode>>(new Map());
@@ -139,6 +176,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   useEffect(() => {
     if (!nodes.length) return;
 
+    metaCacheRef.current.clear();
+    labelWidthCacheRef.current.clear();
+    gridRef.current.builtAt = 0;
+
     const nMap = new Map<string, GraphNode>();
     nodes.forEach(n => nMap.set(n.id, n));
     nodeMapRef.current = nMap;
@@ -206,7 +247,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .alphaDecay(0.025)
       .velocityDecay(0.4)
       .on('tick', () => {
-        draw();
+        drawRef.current();
       })
       .on('end', () => {
         setSimRunning(false);
@@ -220,7 +261,26 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     };
   }, [nodes, edges, layoutMode, computeArchitecturePositions, computeIslandsPositions]);
 
-  // Handle Resize
+  // Center the camera on a requested node (search result click, inspector jump)
+  useEffect(() => {
+    if (!focusId) return;
+    const n = nodeMapRef.current.get(focusId);
+    const canvas = canvasRef.current;
+    if (!n || n.x === undefined || n.y === undefined || !canvas) return;
+    // draw maps node -> width/2 + t.x + k*n.x ; to land the node exactly at the
+    // canvas center the camera offset must be -k*n (no width/2 term!)
+    const t = transformRef.current;
+    const k = Math.max(t.k, 0.9);
+    t.x = -n.x * k;
+    t.y = -n.y * k;
+    t.k = k;
+    scheduleDraw();
+    onFocusHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId]);
+
+  // Handle Resize (window + container: opening the inspector shrinks the canvas,
+  // the backing store must follow or mouse coords drift from draw coords)
   useEffect(() => {
     const handleResize = () => {
       const canvas = canvasRef.current;
@@ -229,12 +289,18 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       if (rect) {
         canvas.width = rect.width * window.devicePixelRatio;
         canvas.height = rect.height * window.devicePixelRatio;
-        draw();
+        drawRef.current();
       }
     };
     handleResize();
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const parent = canvasRef.current?.parentElement;
+    const ro = parent ? new ResizeObserver(handleResize) : null;
+    if (parent && ro) ro.observe(parent);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      ro?.disconnect();
+    };
   }, []);
 
   // Helper to get Node Icon Glyph & Kind Color
@@ -256,12 +322,25 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     return { glyph: '•', badge: 'sym', color: '#06b6d4' };
   };
 
+  const getNodeMetaCached = (n: GraphNode) => {
+    let m = metaCacheRef.current.get(n.id);
+    if (!m) {
+      m = getNodeMeta(n);
+      metaCacheRef.current.set(n.id, m);
+    }
+    return m;
+  };
+
   // Main Canvas Draw Function
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    const transform = transformRef.current;
+    const huge = nodes.length > 3000;
+    const obsidianMode = nodeViewMode === 'obsidian';
 
     const dpr = window.devicePixelRatio || 1;
     const width = canvas.width / dpr;
@@ -271,26 +350,28 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
 
-    // 1. Draw Subtle Tech Grid Background
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
-    ctx.lineWidth = 1;
-    const gridSize = 40 * transform.k;
-    const offsetX = (width / 2 + transform.x) % gridSize;
-    const offsetY = (height / 2 + transform.y) % gridSize;
-    for (let x = offsetX; x < width; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
+    // 1. Draw Subtle Tech Grid Background (cards mode only — Obsidian uses plain black)
+    if (!obsidianMode) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
+      ctx.lineWidth = 1;
+      const gridSize = 40 * transform.k;
+      const offsetX = (width / 2 + transform.x) % gridSize;
+      const offsetY = (height / 2 + transform.y) % gridSize;
+      for (let x = offsetX; x < width; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      for (let y = offsetY; y < height; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
-    for (let y = offsetY; y < height; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
-    ctx.restore();
 
     // 2. Camera Transform
     ctx.translate(width / 2 + transform.x, height / 2 + transform.y);
@@ -299,6 +380,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     const activeNode = hoveredNode || selectedNode;
     const pathSet = activePath ? new Set(activePath) : null;
     const activeAdj = activeNode ? adjMapRef.current.get(activeNode.id) : null;
+    const searchIds: Set<string> | null = (searchQuery && matchedIds && matchedIds.size > 0) ? matchedIds : null;
 
     // 3. Draw Architectural Tier Headers if in Architecture Mode
     if (layoutMode === 'architecture' && transform.k > 0.4) {
@@ -321,8 +403,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       });
     }
 
-    // 4. Draw Community Island Halos in Islands Mode
-    if (layoutMode === 'islands' && transform.k < 1.2) {
+    // 4. Draw Community Island Halos in Islands Mode (cards mode only)
+    if (layoutMode === 'islands' && !obsidianMode && transform.k < 1.2) {
       const centers = commCentersRef.current;
       Object.entries(centers).forEach(([cidStr, center]) => {
         const cid = Number(cidStr);
@@ -338,8 +420,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       });
     }
 
-    // 5. Draw Smooth Curved Edges
+    // 5. Draw Edges — Obsidian mode: straight faint lines, batched per style bucket.
+    //    Cards mode keeps the curved beziers.
     const linksToDraw = simLinksRef.current;
+    const pathNormal = new Path2D();
+    const pathInferred = new Path2D();
+    const pathAmbiguous = new Path2D();
+    const pathDimmed = new Path2D();
+    const arrowsNormal = new Path2D();
+
     linksToDraw.forEach(link => {
       const s = link.source;
       const t = link.target;
@@ -347,86 +436,150 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
       const isPathEdge = pathSet && pathSet.has(s.id) && pathSet.has(t.id);
       const isConnected = activeNode && (s.id === activeNode.id || t.id === activeNode.id);
-      const isDimmed = (activeNode || pathSet) && !isConnected && !isPathEdge;
+      const searchConnected = !!(searchIds && (searchIds.has(s.id) || searchIds.has(t.id)));
+      const isDimmed = (activeNode || pathSet)
+        ? !isConnected && !isPathEdge
+        : !!(searchIds && !searchConnected);
 
-      // Calculate elegant quadratic bezier curve
-      const dx = t.x - s.x;
-      const dy = t.y - s.y;
-      const dist = Math.hypot(dx, dy) || 1;
-      const midX = (s.x + t.x) / 2;
-      const midY = (s.y + t.y) / 2;
-
-      // Subtle arc curve (perpendicular offset)
-      const curveStrength = Math.min(25, dist * 0.08);
-      const cpX = midX - (dy / dist) * curveStrength;
-      const cpY = midY + (dx / dist) * curveStrength;
-
-      ctx.beginPath();
-      ctx.moveTo(s.x, s.y);
-      ctx.quadraticCurveTo(cpX, cpY, t.x, t.y);
-
-      if (isPathEdge) {
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = Math.max(3.2 / transform.k, 3);
-        ctx.setLineDash([]);
-      } else if (isConnected) {
-        const isOutgoing = s.id === activeNode.id;
-        ctx.strokeStyle = isOutgoing ? '#10b981' : '#38bdf8';
-        ctx.lineWidth = Math.max(2.6 / transform.k, 2.4);
-        ctx.setLineDash([]);
-      } else if (isDimmed) {
-        ctx.strokeStyle = 'rgba(75, 85, 99, 0.1)';
-        ctx.lineWidth = Math.max(0.7 / transform.k, 0.7);
-        ctx.setLineDash([]);
-      } else {
-        if (link.confidence === 'EXTRACTED') {
-          ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
-          ctx.lineWidth = Math.max(1.1 / transform.k, 1.1);
-          ctx.setLineDash([]);
-        } else if (link.confidence === 'AMBIGUOUS') {
-          ctx.strokeStyle = 'rgba(245, 158, 11, 0.55)';
-          ctx.lineWidth = Math.max(1.1 / transform.k, 1.1);
-          ctx.setLineDash([3 / transform.k, 3 / transform.k]);
-        } else {
-          ctx.strokeStyle = 'rgba(96, 165, 250, 0.4)';
-          ctx.lineWidth = Math.max(1.1 / transform.k, 1.1);
-          ctx.setLineDash([5 / transform.k, 4 / transform.k]);
-        }
+      let endX = t.x;
+      let endY = t.y;
+      let ctrlX: number | null = null;
+      let ctrlY: number | null = null;
+      if (!obsidianMode) {
+        // Subtle arc curve (perpendicular offset) — cards mode only
+        const dx = t.x - s.x;
+        const dy = t.y - s.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const midX = (s.x + t.x) / 2;
+        const midY = (s.y + t.y) / 2;
+        const curveStrength = Math.min(25, dist * 0.08);
+        ctrlX = midX - (dy / dist) * curveStrength;
+        ctrlY = midY + (dx / dist) * curveStrength;
       }
-      ctx.stroke();
 
-      // Draw Arrowheads on Bezier curve
-      if (showArrows && (isConnected || isPathEdge || (transform.k > 1.1 && !isDimmed))) {
-        // Tangent angle at curve end (t.x, t.y)
-        const angle = Math.atan2(t.y - cpY, t.x - cpX);
+      const trace = () => {
+        if (ctrlX !== null && ctrlY !== null) {
+          pathDimmed.moveTo(s.x, s.y);
+          pathDimmed.quadraticCurveTo(ctrlX, ctrlY, endX, endY);
+        } else {
+          pathDimmed.moveTo(s.x, s.y);
+          pathDimmed.lineTo(endX, endY);
+        }
+      };
+      const traceInto = (p: Path2D) => {
+        if (ctrlX !== null && ctrlY !== null) {
+          p.moveTo(s.x, s.y);
+          p.quadraticCurveTo(ctrlX, ctrlY, endX, endY);
+        } else {
+          p.moveTo(s.x, s.y);
+          p.lineTo(endX, endY);
+        }
+      };
+
+      if (isPathEdge || isConnected) {
+        // highlighted edges are few: draw directly
+        ctx.beginPath();
+        if (ctrlX !== null && ctrlY !== null) {
+          ctx.moveTo(s.x, s.y);
+          ctx.quadraticCurveTo(ctrlX, ctrlY, endX, endY);
+        } else {
+          ctx.moveTo(s.x, s.y);
+          ctx.lineTo(endX, endY);
+        }
+        if (isPathEdge) {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = Math.max(3.2 / transform.k, 3);
+        } else {
+          ctx.strokeStyle = s.id === activeNode!.id ? (obsidianMode ? 'rgba(230,180,120,0.75)' : '#10b981') : '#38bdf8';
+          ctx.lineWidth = Math.max(2.2 / transform.k, 2);
+        }
+        ctx.setLineDash([]);
+        ctx.stroke();
+      } else if (isDimmed) {
+        trace();
+      } else if (link.confidence === 'AMBIGUOUS') {
+        traceInto(pathAmbiguous);
+      } else if (link.confidence === 'INFERRED') {
+        traceInto(pathInferred);
+      } else {
+        traceInto(pathNormal);
+      }
+
+      // Draw Arrowheads (cards mode + high zoom only; Obsidian has no arrows)
+      if (!obsidianMode && showArrows && (isConnected || isPathEdge || (transform.k > 1.1 && !isDimmed))) {
+        const angle = ctrlX !== null && ctrlY !== null
+          ? Math.atan2(endY - ctrlY, endX - ctrlX)
+          : Math.atan2(endY - s.y, endX - s.x);
         const headlen = isConnected || isPathEdge ? Math.max(8 / transform.k, 7) : Math.max(5 / transform.k, 5);
         const targetOffset = nodeViewMode === 'cards' && transform.k > 0.6 ? 16 : 8;
-        const arrowX = t.x - Math.cos(angle) * targetOffset;
-        const arrowY = t.y - Math.sin(angle) * targetOffset;
+        const arrowX = endX - Math.cos(angle) * targetOffset;
+        const arrowY = endY - Math.sin(angle) * targetOffset;
 
-        ctx.fillStyle = isPathEdge ? '#38bdf8' :
-          isConnected ? (s.id === activeNode.id ? '#10b981' : '#38bdf8') :
-          'rgba(148, 163, 184, 0.7)';
-
-        ctx.beginPath();
-        ctx.moveTo(arrowX, arrowY);
-        ctx.lineTo(arrowX - headlen * Math.cos(angle - Math.PI / 7), arrowY - headlen * Math.sin(angle - Math.PI / 7));
-        ctx.lineTo(arrowX - headlen * Math.cos(angle + Math.PI / 7), arrowY - headlen * Math.sin(angle + Math.PI / 7));
-        ctx.closePath();
-        ctx.fill();
+        if (isConnected || isPathEdge) {
+          ctx.fillStyle = isPathEdge ? '#38bdf8' : (s.id === activeNode!.id ? '#10b981' : '#38bdf8');
+          ctx.beginPath();
+          ctx.moveTo(arrowX, arrowY);
+          ctx.lineTo(arrowX - headlen * Math.cos(angle - Math.PI / 7), arrowY - headlen * Math.sin(angle - Math.PI / 7));
+          ctx.lineTo(arrowX - headlen * Math.cos(angle + Math.PI / 7), arrowY - headlen * Math.sin(angle + Math.PI / 7));
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          arrowsNormal.moveTo(arrowX, arrowY);
+          arrowsNormal.lineTo(arrowX - headlen * Math.cos(angle - Math.PI / 7), arrowY - headlen * Math.sin(angle - Math.PI / 7));
+          arrowsNormal.lineTo(arrowX - headlen * Math.cos(angle + Math.PI / 7), arrowY - headlen * Math.sin(angle + Math.PI / 7));
+          arrowsNormal.closePath();
+        }
       }
 
       // Draw Edge Relation Label
       if (showEdgeLabels && (isConnected || (transform.k > 1.6 && !isDimmed))) {
         ctx.font = `${Math.max(9, 10 / transform.k)}px sans-serif`;
         ctx.fillStyle = isConnected ? '#f3f4f6' : 'rgba(209, 213, 219, 0.7)';
-        ctx.fillText(link.relation || 'links', cpX + 2, cpY - 2);
+        const lx = ctrlX !== null ? ctrlX + 2 : (s.x + endX) / 2;
+        const ly = ctrlY !== null ? ctrlY - 2 : (s.y + endY) / 2;
+        ctx.fillText(link.relation || 'links', lx, ly);
       }
     });
 
+    // batched style pass
+    ctx.setLineDash([]);
+    const lineScale = 1 / transform.k;
+    if (pathNormal) {
+      ctx.strokeStyle = obsidianMode ? 'rgba(200, 200, 210, 0.10)' : 'rgba(148, 163, 184, 0.45)';
+      ctx.lineWidth = Math.max(1.1 * lineScale, 1.1);
+      ctx.stroke(pathNormal);
+    }
+    if (pathInferred) {
+      ctx.strokeStyle = obsidianMode ? 'rgba(120, 160, 250, 0.09)' : 'rgba(96, 165, 250, 0.4)';
+      ctx.lineWidth = Math.max(1.1 * lineScale, 1.1);
+      ctx.setLineDash([5 / transform.k, 4 / transform.k]);
+      ctx.stroke(pathInferred);
+      ctx.setLineDash([]);
+    }
+    if (pathAmbiguous) {
+      ctx.strokeStyle = obsidianMode ? 'rgba(245, 170, 80, 0.13)' : 'rgba(245, 158, 11, 0.55)';
+      ctx.lineWidth = Math.max(1.1 * lineScale, 1.1);
+      ctx.setLineDash([3 / transform.k, 3 / transform.k]);
+      ctx.stroke(pathAmbiguous);
+      ctx.setLineDash([]);
+    }
+    if (pathDimmed) {
+      ctx.strokeStyle = 'rgba(75, 85, 99, 0.1)';
+      ctx.lineWidth = Math.max(0.7 * lineScale, 0.7);
+      ctx.stroke(pathDimmed);
+    }
+    if (showArrows) {
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.7)';
+      ctx.fill(arrowsNormal);
+    }
     ctx.setLineDash([]);
 
-    // 6. Draw Nodes (Capsule Cards vs Minimal Dots)
+    // 6. Draw Nodes — Obsidian mode: tiny community-colored dots, labels only
+    //    on hover/selection/high zoom. Cards mode keeps the capsule cards.
+    //    Glow (shadowBlur) is restricted to the few active nodes so this stays
+    //    fast on 50k+ node graphs.
+    const labelBudget = obsidianMode ? 80 : Infinity; // cap labels drawn per frame
+    let labelsDrawn = 0;
     nodes.forEach(n => {
       if (n.x === undefined || n.y === undefined) return;
 
@@ -436,8 +589,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       const isNeighbor = activeAdj && activeAdj.has(n.id);
       const isSelf = activeNode && activeNode.id === n.id;
       const isSameComm = highlightedCommunity !== null && n.community === highlightedCommunity;
+      const isSearchMatch = !!(searchIds && searchIds.has(n.id));
+      const isSearchMiss = !!searchIds && !isSearchMatch;
 
-      const meta = getNodeMeta(n);
+      const meta = getNodeMetaCached(n);
       const commColor = (n.community !== undefined && communityColors[n.community]) || '#4f8cff';
 
       let alpha = 1;
@@ -445,45 +600,49 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         alpha = isPathNode ? 1 : 0.15;
       } else if (activeNode) {
         alpha = isSelf || isNeighbor ? 1 : 0.18;
+      } else if (isSearchMatch) {
+        alpha = 1;
+      } else if (isSearchMiss) {
+        alpha = 0.15;
       } else if (highlightedCommunity !== null) {
         alpha = isSameComm ? 1 : 0.18;
       }
 
-      const drawAsCard = nodeViewMode === 'cards' && (transform.k > 0.55 || isSelected || isHovered || isNeighbor);
+      const drawAsCard = nodeViewMode === 'cards' && (transform.k > (huge ? 1.4 : 0.55) || isSelected || isHovered || isNeighbor);
 
       if (drawAsCard) {
-        // --- High-End Capsule Card Rendering ---
+        // --- High-End Capsule Card Rendering (cards mode) ---
         const labelText = (n.label || n.id).slice(0, 32);
         ctx.font = '500 11px Inter, system-ui, sans-serif';
-        const textWidth = ctx.measureText(labelText).width;
+        let textWidth = labelWidthCacheRef.current.get(labelText);
+        if (textWidth === undefined) {
+          textWidth = ctx.measureText(labelText).width;
+          labelWidthCacheRef.current.set(labelText, textWidth);
+        }
         const cardW = Math.max(75, textWidth + 34);
         const cardH = 22;
         const cardX = n.x - cardW / 2;
         const cardY = n.y - cardH / 2;
         const r = 6; // rounded corners
 
-        // Background shadow
-        if (isSelected || isHovered) {
-          ctx.shadowColor = isSelected ? '#ffffff' : commColor;
+        if (isSelected || isHovered || isSearchMatch) {
+          ctx.shadowColor = isSelected ? '#ffffff' : isHovered ? commColor : '#f59e0b';
           ctx.shadowBlur = 12;
         } else {
           ctx.shadowBlur = 0;
         }
 
-        // Card Body
         ctx.beginPath();
         ctx.roundRect(cardX, cardY, cardW, cardH, r);
         ctx.fillStyle = alpha > 0.5 ? 'rgba(15, 23, 42, 0.94)' : 'rgba(15, 23, 42, 0.3)';
         ctx.fill();
 
-        // Card Border
-        ctx.lineWidth = isSelected ? 2 : isHovered || isNeighbor ? 1.5 : 1;
-        ctx.strokeStyle = isSelected ? '#ffffff' : isHovered ? '#38bdf8' : isNeighbor ? commColor : `${commColor}88`;
+        ctx.lineWidth = isSelected ? 2 : isHovered || isNeighbor || isSearchMatch ? 1.5 : 1;
+        ctx.strokeStyle = isSelected ? '#ffffff' : isHovered ? '#38bdf8' : isNeighbor ? commColor : isSearchMatch ? '#f59e0b' : `${commColor}88`;
         ctx.stroke();
-        ctx.shadowBlur = 0; // reset shadow
+        ctx.shadowBlur = 0;
 
         if (alpha > 0.4) {
-          // Left Glyph Tag
           ctx.beginPath();
           ctx.roundRect(cardX + 2, cardY + 2, 18, cardH - 4, 4);
           ctx.fillStyle = `${meta.color}25`;
@@ -493,16 +652,27 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           ctx.textAlign = 'center';
           ctx.fillText(meta.glyph, cardX + 11, cardY + 14);
 
-          // Card Label
           ctx.font = '500 11px Inter, system-ui, sans-serif';
           ctx.fillStyle = isSelected ? '#ffffff' : '#f3f4f6';
           ctx.textAlign = 'left';
           ctx.fillText(labelText, cardX + 25, cardY + 15);
         }
       } else {
-        // --- Clean Circular Dot Rendering (when zoomed out) ---
-        let radius = Math.max(3.5, Math.min(14, 3 + (n.degree || 1) * 0.45));
-        if (isSelected || isHovered) radius += 2.5;
+        // --- Obsidian-style dot rendering ---
+        const deg = n.degree || 1;
+        let radius = Math.max(2.2, Math.min(8, 1.8 + Math.sqrt(deg) * 0.9));
+        if (isSelected || isHovered) radius += 1.6;
+        ctx.globalAlpha = alpha;
+
+        // soft halo only for significant nodes (hub, active, hovered, matched)
+        const wantsGlow = isSelected || isHovered || isSelf || isNeighbor || isSearchMatch || deg >= 12;
+        if (wantsGlow && !huge) {
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, radius * 2.4, 0, Math.PI * 2);
+          ctx.fillStyle = commColor;
+          ctx.globalAlpha = alpha * 0.14;
+          ctx.fill();
+        }
 
         ctx.beginPath();
         ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
@@ -512,35 +682,41 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
         if (isSelected || isPathNode) {
           ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = Math.max(2.5 / transform.k, 2);
+          ctx.lineWidth = Math.max(2 / transform.k, 1.8);
           ctx.stroke();
         } else if (isHovered || isNeighbor) {
-          ctx.strokeStyle = isHovered ? '#38bdf8' : commColor;
-          ctx.lineWidth = Math.max(2 / transform.k, 1.8);
+          ctx.strokeStyle = commColor;
+          ctx.lineWidth = Math.max(1.6 / transform.k, 1.5);
           ctx.stroke();
         }
         ctx.globalAlpha = 1;
 
-        // Label on hover/select in dot mode
-        if (isSelected || isHovered || isNeighbor) {
-          const text = n.label || n.id;
-          ctx.font = '11px Inter, system-ui, sans-serif';
+        // Obsidian labels: invisible at rest, fade in while hovering/zooming
+        const showLabel = isSelected || isHovered || isSelf || isNeighbor || isSearchMatch
+          || (obsidianMode && transform.k > 1.7 && deg >= 8 && labelsDrawn < labelBudget);
+        if (showLabel && labelsDrawn < labelBudget) {
+          labelsDrawn++;
+          const text = (n.label || n.id).slice(0, 40);
+          ctx.font = '10.5px Inter, system-ui, sans-serif';
           const tw = ctx.measureText(text).width;
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-          ctx.fillRect(n.x + radius + 4, n.y - 10, tw + 8, 18);
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-          ctx.strokeRect(n.x + radius + 4, n.y - 10, tw + 8, 18);
-          ctx.fillStyle = '#ffffff';
+          const lx = n.x + radius + 4;
+          const ly = n.y - 9;
+          ctx.globalAlpha = Math.max(alpha, isNeighbor ? 0.75 : alpha);
+          ctx.fillStyle = 'rgba(10, 10, 16, 0.85)';
+          ctx.fillRect(lx, ly, tw + 8, 17);
+          ctx.fillStyle = isSelf || isSelected ? '#ffffff' : 'rgba(228, 228, 235, 0.92)';
           ctx.textAlign = 'left';
-          ctx.fillText(text, n.x + radius + 8, n.y + 3);
+          ctx.fillText(text, lx + 4, ly + 12.5);
+          ctx.globalAlpha = 1;
         }
       }
     });
 
     ctx.restore();
-  }, [nodes, edges, selectedNode, hoveredNode, highlightedCommunity, activePath, communityColors, transform, showArrows, showEdgeLabels, layoutMode, nodeViewMode]);
+  }, [nodes, edges, selectedNode, hoveredNode, highlightedCommunity, activePath, communityColors, showArrows, showEdgeLabels, layoutMode, nodeViewMode, searchQuery, matchedIds]);
 
   useEffect(() => {
+    drawRef.current = draw;
     draw();
   }, [draw]);
 
@@ -551,18 +727,17 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      const t = transformRef.current;
       const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
-      setTransform(prev => ({
-        ...prev,
-        k: Math.max(0.04, Math.min(8, prev.k * zoomFactor))
-      }));
+      t.k = Math.max(0.04, Math.min(8, t.k * zoomFactor));
+      scheduleDraw();
     };
 
     canvas.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       canvas.removeEventListener('wheel', onWheel);
     };
-  }, []);
+  }, [scheduleDraw]);
 
   // Screen to Graph coordinates
   const screenToGraph = (clientX: number, clientY: number) => {
@@ -571,27 +746,61 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     const rect = canvas.getBoundingClientRect();
     const mouseX = clientX - rect.left;
     const mouseY = clientY - rect.top;
+    const t = transformRef.current;
     return {
-      x: (mouseX - rect.width / 2 - transform.x) / transform.k,
-      y: (mouseY - rect.height / 2 - transform.y) / transform.k,
+      x: (mouseX - rect.width / 2 - t.x) / t.k,
+      y: (mouseY - rect.height / 2 - t.y) / t.k,
     };
   };
 
-  const findNodeAt = (x: number, y: number) => {
+  // Spatial hash grid for fast hit tests (lazily rebuilt, 250ms TTL)
+  const rebuildGrid = () => {
+    const cell = gridRef.current.cell;
+    const map = new Map<string, GraphNode[]>();
     for (const n of nodes) {
       if (n.x === undefined || n.y === undefined) continue;
-      const dx = n.x - x;
-      const dy = n.y - y;
-      const hitRadius = nodeViewMode === 'cards' && transform.k > 0.55 ? 30 : Math.max(10, 5 + (n.degree || 1) * 0.45);
-      if (dx * dx + dy * dy <= hitRadius * hitRadius) {
-        return n;
+      const key = `${Math.floor(n.x / cell)}:${Math.floor(n.y / cell)}`;
+      const arr = map.get(key);
+      if (arr) arr.push(n); else map.set(key, [n]);
+    }
+    gridRef.current.map = map;
+    gridRef.current.builtAt = performance.now();
+  };
+
+  const findNodeAt = (x: number, y: number) => {
+    if (performance.now() - gridRef.current.builtAt > 250 || gridRef.current.map.size === 0) {
+      rebuildGrid();
+    }
+    const cell = gridRef.current.cell;
+    const cx = Math.floor(x / cell);
+    const cy = Math.floor(y / cell);
+    const cards = nodeViewMode === 'cards' && transformRef.current.k > 0.55;
+    let best: GraphNode | null = null;
+    let bestD = Infinity;
+    for (let gx = cx - 1; gx <= cx + 1; gx++) {
+      for (let gy = cy - 1; gy <= cy + 1; gy++) {
+        const arr = gridRef.current.map.get(`${gx}:${gy}`);
+        if (!arr) continue;
+        for (const n of arr) {
+          const dx = n.x! - x;
+          const dy = n.y! - y;
+          const d = dx * dx + dy * dy;
+          if (d >= bestD) continue;
+          const hitRadius = cards ? 30 : Math.max(10, 5 + (n.degree || 1) * 0.45);
+          if (d <= hitRadius * hitRadius) {
+            bestD = d;
+            best = n;
+          }
+        }
       }
     }
-    return null;
+    return best;
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
+    downPosRef.current = { x: e.clientX, y: e.clientY };
+    dragMovedRef.current = false;
     const gPos = screenToGraph(e.clientX, e.clientY);
     const hit = findNodeAt(gPos.x, gPos.y);
 
@@ -599,55 +808,89 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       setDraggedNode(hit);
       hit.fx = hit.x;
       hit.fy = hit.y;
-      if (simulationRef.current) {
-        simulationRef.current.alphaTarget(0.1).restart();
-        setSimRunning(true);
-      }
     } else {
       setIsDraggingCanvas(true);
-      setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
+      setDragStart({ x: e.clientX - transformRef.current.x, y: e.clientY - transformRef.current.y });
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (draggedNode) {
+      if (!dragMovedRef.current) {
+        const dx = e.clientX - downPosRef.current.x;
+        const dy = e.clientY - downPosRef.current.y;
+        if (dx * dx + dy * dy > 9) {
+          dragMovedRef.current = true;
+          if (simulationRef.current) {
+            simulationRef.current.alphaTarget(0.1).restart();
+            setSimRunning(true);
+          }
+        }
+      }
       const gPos = screenToGraph(e.clientX, e.clientY);
       draggedNode.fx = gPos.x;
       draggedNode.fy = gPos.y;
       draggedNode.x = gPos.x;
       draggedNode.y = gPos.y;
-      draw();
+      scheduleDraw();
     } else if (isDraggingCanvas) {
-      setTransform(prev => ({
-        ...prev,
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y,
-      }));
+      const dx = e.clientX - downPosRef.current.x;
+      const dy = e.clientY - downPosRef.current.y;
+      if (dx * dx + dy * dy > 9) dragMovedRef.current = true;
+      const t = transformRef.current;
+      t.x = e.clientX - dragStart.x;
+      t.y = e.clientY - dragStart.y;
+      scheduleDraw();
     } else {
-      const gPos = screenToGraph(e.clientX, e.clientY);
-      const hit = findNodeAt(gPos.x, gPos.y);
-      setHoveredNode(hit);
+      const { clientX, clientY } = e;
+      if (hoverRafRef.current) return;
+      hoverRafRef.current = requestAnimationFrame(() => {
+        hoverRafRef.current = 0;
+        const gPos = screenToGraph(clientX, clientY);
+        const hit = findNodeAt(gPos.x, gPos.y);
+        const id = hit ? hit.id : null;
+        if (id !== lastHoverIdRef.current) {
+          lastHoverIdRef.current = id;
+          setHoveredNode(hit);
+        }
+      });
     }
   };
 
-  const handleMouseUp = (e: React.MouseEvent) => {
+  const handleMouseUp = () => {
     if (draggedNode) {
-      draggedNode.fx = null;
-      draggedNode.fy = null;
-      setDraggedNode(null);
-      if (simulationRef.current) {
-        simulationRef.current.alphaTarget(0);
+      if (dragMovedRef.current) {
+        // real drag: release the node back to the physics
+        draggedNode.fx = null;
+        draggedNode.fy = null;
+        if (simulationRef.current) simulationRef.current.alphaTarget(0);
+        if (pinnedRef.current === draggedNode) pinnedRef.current = null;
+      } else {
+        // keep the clicked node pinned in place; release the previously pinned one
+        if (pinnedRef.current && pinnedRef.current !== draggedNode) {
+          pinnedRef.current.fx = null;
+          pinnedRef.current.fy = null;
+        }
+        pinnedRef.current = draggedNode;
       }
+      // click or drag end: select it
+      onSelectNode(draggedNode);
+      setDraggedNode(null);
     } else if (isDraggingCanvas) {
       setIsDraggingCanvas(false);
-      const gPos = screenToGraph(e.clientX, e.clientY);
-      const hit = findNodeAt(gPos.x, gPos.y);
-      onSelectNode(hit);
+      if (!dragMovedRef.current) {
+        // plain click on empty canvas: deselect
+        onSelectNode(null);
+      }
     }
   };
 
   const resetView = () => {
-    setTransform({ x: 0, y: 0, k: 0.85 });
+    const t = transformRef.current;
+    t.x = 0;
+    t.y = 0;
+    t.k = 0.85;
+    scheduleDraw();
   };
 
   const toggleSimulation = () => {
@@ -662,7 +905,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   };
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#090d16' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: nodeViewMode === 'obsidian' ? '#0a0a10' : '#090d16' }}>
       <canvas
         ref={canvasRef}
         onMouseDown={handleMouseDown}
@@ -755,10 +998,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
         <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} />
 
-        {/* Card vs Dot View Switcher */}
+        {/* Obsidian vs Cards View Switcher */}
         <button
-          onClick={() => setNodeViewMode(m => m === 'cards' ? 'dots' : 'cards')}
-          title="Toggle Capsule Cards vs Minimal Dots"
+          onClick={() => setNodeViewMode(m => m === 'obsidian' ? 'cards' : 'obsidian')}
+          title="Toggle Obsidian dot view vs capsule card view"
           style={{
             background: 'transparent',
             border: '1px solid transparent',
@@ -768,7 +1011,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             fontSize: 11,
           }}
         >
-          {nodeViewMode === 'cards' ? 'Cards View' : 'Dots View'}
+          {nodeViewMode === 'obsidian' ? 'Obsidian View' : 'Cards View'}
         </button>
       </div>
 
@@ -815,14 +1058,14 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           <Tag size={16} />
         </button>
         <button
-          onClick={() => setTransform(t => ({ ...t, k: Math.min(8, t.k * 1.25) }))}
+          onClick={() => { const t = transformRef.current; t.k = Math.min(8, t.k * 1.25); scheduleDraw(); }}
           title="Zoom In"
           style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', padding: 6, borderRadius: 4, display: 'flex' }}
         >
           <ZoomIn size={16} />
         </button>
         <button
-          onClick={() => setTransform(t => ({ ...t, k: Math.max(0.04, t.k * 0.8) }))}
+          onClick={() => { const t = transformRef.current; t.k = Math.max(0.04, t.k * 0.8); scheduleDraw(); }}
           title="Zoom Out"
           style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', padding: 6, borderRadius: 4, display: 'flex' }}
         >
