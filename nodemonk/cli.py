@@ -155,7 +155,8 @@ def cmd_path(args) -> None:  # noqa: ANN001
         print(f"no path between {_label(G, a)!r} and {_label(G, b)!r} ({res.get('message', '')})")
         raise SystemExit(0)
     path = res["path"]
-    print(f"shortest path ({res['hops']} hops{f', cost {res['cost']}' if res.get('cost') is not None else ''}):")
+    cost_part = f", cost {res['cost']}" if res.get("cost") is not None else ""
+    print(f"shortest path ({res['hops']} hops{cost_part}):")
     for i, nid in enumerate(path):
         if i < len(path) - 1:
             d = G.get_edge_data(nid, path[i + 1], {}) or {}

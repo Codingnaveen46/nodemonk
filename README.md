@@ -102,6 +102,22 @@ Once installed, examples your assistant understands:
 nodemonk hook install        # post-commit hook; uninstall/status supported
 ```
 
+### Nothing to install? Run it ephemerally
+
+Like graphify, nodemonk runs without any persistent install. Your agent does this automatically (the skill contains a bootstrap step); humans can use the same one-liners:
+
+```bash
+# uv / uvx — run straight from GitHub, cached after first run (recommended)
+uvx --from git+https://github.com/Codingnaveen46/nodemonk nodemonk build .
+uvx --from git+https://github.com/Codingnaveen46/nodemonk nodemonk query "how does auth work?"
+
+# Docker — no Python at all
+docker run --rm -v "$(pwd):/workspace" nodemonk build /workspace
+# (build the image once: docker build -t nodemonk https://github.com/Codingnaveen46/nodemonk.git)
+```
+
+`nodemonk install` still recommended for daily use — it registers the `/nodemonk` skill so agents bootstrap themselves when the binary is missing.
+
 ---
 
 ### 3. Launch the Interactive React Web Application

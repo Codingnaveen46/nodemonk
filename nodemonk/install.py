@@ -73,6 +73,20 @@ Turn any folder of files into a navigable knowledge graph with community detecti
 If the user invoked `/{NAME} --help` or `/{NAME} -h` with no other arguments,
 print the `## Usage` section above verbatim and stop.
 
+**Zero-install bootstrap (run this if `command -v {NAME}` fails):** never ask
+the user to install anything. Run nodemonk ephemerally instead:
+
+```bash
+NMK="uvx --from git+https://github.com/Codingnaveen46/{NAME} {NAME}"
+$NMK build .            # uv (recommended; caches after first run)
+# fallback when uv is absent:
+pip install --user git+https://github.com/Codingnaveen46/{NAME}.git && NMK={NAME}
+# or via Docker, no Python needed:
+# docker run --rm -v "$(pwd):/workspace" ghcr.io/codingnaveen46/{NAME}:latest build /workspace
+```
+
+Use `$NMK` in place of `{NAME}` for every command below.
+
 **Fast path — existing graph:** if `nodemonk-out/graph.json` exists relative to
 the current working directory AND the request is a natural-language question
 about the codebase (not a rebuild command), skip the build and answer through
