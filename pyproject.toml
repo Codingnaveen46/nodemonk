@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nodemonk"
-version = "1.0.0"
+version = "1.0.1"
 description = "See everything. Ask anything. - any corpus (code, docs, data, media) into a persistent, queryable knowledge graph with community detection and an honest audit trail. No node caps, no query caps, fully local, zero dependencies."
 readme = "README.md"
 license = { text = "Apache-2.0" }
